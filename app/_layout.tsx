@@ -1,18 +1,25 @@
-import { Stack, Redirect, usePathname } from 'expo-router';
+import { Stack, useRouter, usePathname, useRootNavigationState } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { VisitProvider } from '../context/VisitContext';
 import TopNavbar from '../components/TopNavbar';
+import { useEffect } from 'react';
 
 function AppLayout() {
   const { user } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+  const navigationState = useRootNavigationState();
 
-  const isAuthRoute = pathname.startsWith('/auth');
+  const isAuthRoute = pathname?.startsWith('/auth');
 
-  // 🔐 Not logged in → ONLY allow auth routes
-  if (!user && !isAuthRoute) {
-    return <Redirect href="/auth/login" />;
-  }
+  useEffect(() => {
+    if (!navigationState?.key) return;
+
+    // 🔐 Not logged in → Redirect to login
+    if (!user && !isAuthRoute) {
+      router.replace('/auth/login');
+    }
+  }, [user, isAuthRoute, navigationState?.key]);
 
   return (
     <VisitProvider>

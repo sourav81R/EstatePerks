@@ -1,17 +1,15 @@
-
-import * as AuthSession from 'expo-auth-session';
-
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useRootNavigationState } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -19,6 +17,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
+  const navigationState = useRootNavigationState();
   const { login } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -26,24 +25,19 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  /* 🔐 GOOGLE AUTH (WEB CLIENT ONLY) */
+  /* 🔐 GOOGLE AUTH */
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId:
       '301363433740-d540l2p8i6don868nltq9151v2cmtaod.apps.googleusercontent.com',
   });
 
-  /* ✅ Handle Google response */
   useEffect(() => {
-  if (response?.type === 'success') {
-    login({
-      name: 'Google User',
-    });
-    router.replace('/');
-  }
-}, [response]);
+    if (response?.type === 'success' && navigationState?.key) {
+      login({ name: 'Google User' });
+      router.replace('/');
+    }
+  }, [response, navigationState?.key]);
 
-
-  /* ✅ Manual login validation */
   const handleLogin = () => {
     if (!email || !password) {
       setError('Please enter email and password');
@@ -67,7 +61,6 @@ export default function LoginScreen() {
           Sign in to explore premium properties
         </Text>
 
-        {/* Error */}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {/* Email */}
@@ -76,10 +69,13 @@ export default function LoginScreen() {
           value={email}
           onChangeText={setEmail}
           placeholder="Enter your email"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor="#64748b"
           style={styles.input}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          textContentType="none"
         />
 
         {/* Password */}
@@ -89,13 +85,14 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             placeholder="Enter your password"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#64748b"
             secureTextEntry={!showPassword}
             style={styles.passwordInput}
+            autoCorrect={false}
+            autoComplete="off"
+            textContentType="none"
           />
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-          >
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
             <Ionicons
               name={showPassword ? 'eye-off' : 'eye'}
               size={20}
@@ -109,7 +106,7 @@ export default function LoginScreen() {
           <Text style={styles.primaryText}>Sign In</Text>
         </TouchableOpacity>
 
-        {/* Google Sign In */}
+        {/* Google */}
         <TouchableOpacity
           style={styles.googleBtn}
           disabled={!request}
@@ -140,11 +137,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
     borderRadius: 18,
     padding: 26,
-    shadowColor: '#000',
-    shadowOpacity: 0.45,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 12px 30px rgba(0,0,0,0.45)' }
+      : { elevation: 10 }),
   },
 
   brand: {
@@ -178,30 +173,49 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    borderWidth: 1,
-    borderColor: '#1e293b',
+    height: 54,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: 'transparent',
     color: '#e5e7eb',
+    marginBottom: 16,
+
+    ...(Platform.OS === 'web'
+      ? {
+          outlineStyle: 'none',
+          WebkitTextFillColor: '#e5e7eb',
+          WebkitBoxShadow: '0 0 0px 1000px #020617 inset',
+          caretColor: '#22d3ee',
+        }
+      : {}),
   },
 
   passwordWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    borderRadius: 12,
+    height: 54,
     paddingHorizontal: 14,
-    marginBottom: 20,
-    backgroundColor: '#020617',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: 'transparent',
+    marginBottom: 16,
   },
 
   passwordInput: {
     flex: 1,
-    paddingVertical: 14,
     color: '#e5e7eb',
+
+    ...(Platform.OS === 'web'
+      ? {
+          outlineStyle: 'none',
+          WebkitTextFillColor: '#e5e7eb',
+          WebkitBoxShadow: '0 0 0px 1000px #020617 inset',
+          caretColor: '#22d3ee',
+        }
+      : {}),
   },
 
   primaryBtn: {
@@ -227,7 +241,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#020617',
+    backgroundColor: 'transparent',
   },
 
   googleText: {
