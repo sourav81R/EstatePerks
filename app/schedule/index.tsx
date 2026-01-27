@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, Alert } from 'react-native';
+import { View, Text, Alert, Platform } from 'react-native';
 import PrimaryButton from '../../components/PrimaryButton';
 import { useVisit } from '../../context/VisitContext';
 
 export default function ScheduleScreen() {
-  const { addVisit } = useVisit() as { addVisit: (visit: { date: string }) => void };
+  const { addVisit } = useVisit();
 
   return (
     <View style={{ padding: 20 }}>
@@ -15,8 +15,16 @@ export default function ScheduleScreen() {
       <PrimaryButton
         title="Confirm Visit"
         onPress={() => {
-          addVisit({ date: new Date().toISOString() });
-          Alert.alert('Success', 'Visit scheduled! +10 points 🎉');
+          addVisit({
+            id: Math.random().toString(36).substring(7),
+            name: 'Scheduled Visit',
+            date: new Date().toISOString()
+          });
+          if (Platform.OS === 'web') {
+            alert('Success: Visit scheduled! +10 points 🎉');
+          } else {
+            Alert.alert('Success', 'Visit scheduled! +10 points 🎉');
+          }
         }}
       />
     </View>
