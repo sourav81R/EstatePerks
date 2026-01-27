@@ -16,7 +16,7 @@ export default function ScheduleScreen() {
         title="Confirm Visit"
         onPress={() => {
           addVisit({
-            id: Math.random().toString(36).substring(7),
+            id: Date.now().toString(36) + Math.random().toString(36).substring(2),
             name: 'Scheduled Visit',
             date: new Date().toISOString()
           });
