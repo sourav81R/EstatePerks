@@ -1,9 +1,10 @@
+import React from 'react';
 import { View, Text, Alert } from 'react-native';
 import PrimaryButton from '../../components/PrimaryButton';
 import { useVisit } from '../../context/VisitContext';
 
 export default function ScheduleScreen() {
-  const { addVisit } = useVisit();
+  const { addVisit } = useVisit() as { addVisit: (visit: { date: string }) => void };
 
   return (
     <View style={{ padding: 20 }}>
