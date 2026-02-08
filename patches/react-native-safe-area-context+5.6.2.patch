@@ -1,0 +1,22 @@
+diff --git a/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaProvider.js b/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaProvider.js
+index c3d906c..ff8b4c5 100644
+--- a/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaProvider.js
++++ b/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaProvider.js
+@@ -1,3 +1 @@
+-import codegenNativeComponent from 'react-native/Libraries/Utilities/codegenNativeComponent';
+-export default codegenNativeComponent('RNCSafeAreaProvider');
+-//# sourceMappingURL=NativeSafeAreaProvider.js.map
+\ No newline at end of file
++export default {};
+diff --git a/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaView.js b/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaView.js
+index 15034bc..ff8b4c5 100644
+--- a/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaView.js
++++ b/node_modules/react-native-safe-area-context/lib/module/specs/NativeSafeAreaView.js
+@@ -1,5 +1 @@
+-import codegenNativeComponent from 'react-native/Libraries/Utilities/codegenNativeComponent';
+-export default codegenNativeComponent('RNCSafeAreaView', {
+-  interfaceOnly: true
+-});
+-//# sourceMappingURL=NativeSafeAreaView.js.map
+\ No newline at end of file
++export default {};

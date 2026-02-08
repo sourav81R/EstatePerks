@@ -2,24 +2,29 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Add support for .mjs files (Lottie etc.)
 config.resolver.sourceExts.push('mjs');
 
-// Add conditionNames to support modern package exports
-config.resolver.conditionNames = ['browser', 'require', 'import'];
-
-// Prioritize web-compatible entry points
 config.resolver.resolverMainFields = ['browser', 'module', 'main'];
+config.resolver.conditionNames = ['browser', 'require', 'import'];
 
 config.resolver.unstable_enablePackageExports = true;
 
-/* =========================
-   🔥 SAFE AREA FIX FOR WEB
-   ========================= */
-config.resolver.alias = {
-  ...(config.resolver.alias || {}),
-  'react-native-safe-area-context':
-    'react-native-safe-area-context/lib/module/index.web',
+/**
+ * 🔥 BLOCK ALL NATIVE FABRIC FILES FOR WEB
+ */
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    moduleName.includes('/fabric/') ||
+    moduleName.includes('/specs/') ||
+    moduleName.includes('NativeComponent')
+  ) {
+    return {
+      filePath: require.resolve('./empty.js'),
+      type: 'sourceFile',
+    };
+  }
+
+  return context.resolveRequest(context, moduleName, platform);
 };
 
 module.exports = config;
