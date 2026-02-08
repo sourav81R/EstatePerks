@@ -5,11 +5,21 @@ import {
   StyleSheet,
   Animated,
   useWindowDimensions,
+  Platform,
+  Pressable,
 } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withRepeat, 
+  withTiming, 
+  Easing, 
+  interpolateColor 
+} from 'react-native-reanimated';
 
 type NavProps = {
   label: string;
@@ -19,6 +29,35 @@ type NavProps = {
   isMobile: boolean;
 };
 
+const ShimmerChar = ({ char, index, total, isAccent, isMobile }: { char: string, index: number, total: number, isAccent: boolean, isMobile: boolean }) => {
+  const shimmerValue = useSharedValue(0);
+
+  useEffect(() => {
+    shimmerValue.value = withRepeat(
+      withTiming(1, { duration: 3000, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const baseColor = isAccent ? '#fbbf24' : '#ffffff';
+    const offset = index / total;
+    const color = interpolateColor(
+      (shimmerValue.value + offset) % 1,
+      [0, 0.1, 0.2, 1],
+      [baseColor, '#fff', baseColor, baseColor]
+    );
+    return { color };
+  });
+
+  return (
+    <Reanimated.Text style={[styles.logo, isMobile && styles.mobileLogo, isAccent && styles.logoAccent, { letterSpacing: 0, marginLeft: index === 0 ? 0 : -1.5 }, animatedStyle]}>
+      {char}
+    </Reanimated.Text>
+  );
+};
+
 export default function TopNavbar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -26,8 +65,12 @@ export default function TopNavbar() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
+  const { view } = useLocalSearchParams<{ view?: string }>();
+  const isPropertiesView = view === 'properties';
+
   const slideAnim = useRef(new Animated.Value(-15)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -42,27 +85,53 @@ export default function TopNavbar() {
         useNativeDriver: true,
       }),
     ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.08,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, []);
 
-  const isActive = (path: string) =>
-    pathname === path || pathname.startsWith(path);
+  const isActive = (path: string) => pathname === path || (path !== '/' && pathname.startsWith(path));
 
   return (
     <View style={[styles.container, isMobile && styles.mobileContainer]}>
-      <TouchableOpacity onPress={() => router.push('/')}>
-        <Animated.Text
+      <TouchableOpacity onPress={() => router.push('/')} style={styles.logoContainer}>
+        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+          <Ionicons name="business" size={26} color="#fbbf24" style={styles.logoIcon} />
+        </Animated.View>
+        <Animated.View
           style={[
-            styles.logo,
-            isMobile && styles.mobileLogo,
+            styles.logoTextWrapper,
             { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
           ]}
         >
-          {isMobile ? 'E' : 'Estate'}<Text style={styles.logoAccent}>{isMobile ? 'P' : 'Perks'}</Text>
-        </Animated.Text>
+          {(isMobile ? 'EP' : 'EstatePerks').split('').map((char, index) => (
+            <ShimmerChar 
+              key={index} 
+              char={char} 
+              index={index} 
+              total={isMobile ? 2 : 11} 
+              isAccent={index >= (isMobile ? 1 : 6)}
+              isMobile={isMobile}
+            />
+          ))}
+        </Animated.View>
       </TouchableOpacity>
 
       <View style={[styles.links, isMobile && styles.mobileLinks]}>
-        <Nav label="Properties" path="/" active={isActive('/')} icon="business" isMobile={isMobile} />
+        <Nav label="Home" path="/" active={pathname === '/' && !isPropertiesView} icon="home" isMobile={isMobile} />
+        <Nav label="Property Details" path="/property/1" active={isPropertiesView || pathname.startsWith('/property')} icon="business" isMobile={isMobile} />
         <Nav label="Rewards" path="/rewards" active={isActive('/rewards')} icon="gift" isMobile={isMobile} />
         <Nav label="Explore" path="/explore" active={isActive('/explore')} icon="map" isMobile={isMobile} />
 
@@ -82,18 +151,34 @@ function Nav({ label, path, active, icon, isMobile }: NavProps) {
   const router = useRouter();
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={() => router.push(path as any)}
-      style={[styles.navItem, active && styles.activeItem, isMobile && styles.mobileNavItem]}
     >
-      {isMobile ? (
-        <Ionicons name={icon} size={22} color={active ? '#22d3ee' : '#cbd5f5'} />
-      ) : (
-        <Text style={[styles.link, active && styles.activeLink]}>
-          {label}
-        </Text>
+      {({ hovered }) => (
+        <View style={[
+          styles.navItem, 
+          active && styles.activeItem, 
+          isMobile && styles.mobileNavItem,
+          hovered && Platform.OS === 'web' && styles.navHover
+        ]}>
+          {isMobile ? (
+            <Ionicons 
+              name={icon} 
+              size={22} 
+              color={active ? '#22d3ee' : (hovered && Platform.OS === 'web' ? '#fbbf24' : '#cbd5f5')} 
+            />
+          ) : (
+            <Text style={[
+              styles.link, 
+              active && styles.activeLink,
+              hovered && Platform.OS === 'web' && styles.linkHover
+            ]}>
+              {label}
+            </Text>
+          )}
+        </View>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -112,16 +197,34 @@ const styles = StyleSheet.create({
     height: 64,
     paddingHorizontal: 16,
   },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoTextWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoIcon: {
+    marginRight: 10,
+    textShadowColor: 'rgba(251, 191, 36, 0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
   logo: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '900',
-    color: '#e5e7eb',
+    color: '#fff',
+    letterSpacing: -1.5,
   },
   mobileLogo: {
-    fontSize: 22,
+    fontSize: 24,
   },
   logoAccent: {
-    color: '#22d3ee',
+    color: '#fbbf24',
+    textShadowColor: 'rgba(251, 191, 36, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 15,
   },
   links: {
     flexDirection: 'row',
@@ -146,6 +249,11 @@ const styles = StyleSheet.create({
   link: {
     color: '#cbd5f5',
     fontWeight: '600',
+    transitionProperty: 'color',
+    transitionDuration: '0.2s',
+  },
+  linkHover: {
+    color: '#fbbf24',
   },
   activeLink: {
     color: '#22d3ee',
@@ -163,5 +271,8 @@ const styles = StyleSheet.create({
   logoutText: {
     color: '#fecaca',
     fontWeight: '700',
+  },
+  navHover: {
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
   },
 });

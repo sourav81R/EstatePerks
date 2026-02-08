@@ -34,19 +34,24 @@ export default function LoginScreen() {
   useEffect(() => {
     if (response?.type === 'success' && navigationState?.key) {
       login({ name: 'Google User' });
-      router.replace('/');
+      // Use timeout to ensure navigation state is settled
+      const timer = setTimeout(() => {
+        router.replace('/');
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [response, navigationState?.key]);
+  }, [response, navigationState?.key, router]);
 
   const handleLogin = () => {
-    if (!email || !password) {
+    if (!email || !password || !navigationState?.key) {
       setError('Please enter email and password');
       return;
     }
 
     setError('');
     login({ name: email });
-    router.replace('/');
+    // Use timeout to prevent "Attempted to navigate before mounting"
+    setTimeout(() => router.replace('/'), 0);
   };
 
   return (
@@ -183,12 +188,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
 
     ...(Platform.OS === 'web'
-      ? {
+      ? ({
           outlineStyle: 'none',
           WebkitTextFillColor: '#e5e7eb',
           WebkitBoxShadow: '0 0 0px 1000px #020617 inset',
           caretColor: '#22d3ee',
-        }
+        } as any)
       : {}),
   },
 
@@ -209,12 +214,12 @@ const styles = StyleSheet.create({
     color: '#e5e7eb',
 
     ...(Platform.OS === 'web'
-      ? {
+      ? ({
           outlineStyle: 'none',
           WebkitTextFillColor: '#e5e7eb',
           WebkitBoxShadow: '0 0 0px 1000px #020617 inset',
           caretColor: '#22d3ee',
-        }
+        } as any)
       : {}),
   },
 

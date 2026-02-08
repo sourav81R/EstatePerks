@@ -14,19 +14,14 @@ export default function ProfileScreen() {
   const router = useRouter();
 
   // ✅ Safe user data handling
-  const displayName =
-    user && typeof user === 'object' && 'displayName' in user && user.displayName
-      ? user.displayName
-      : 'EstatePerks User';
-
-  const email =
-    user && typeof user === 'object' && 'email' in user && user.email
-      ? user.email
-      : 'Logged in via Google';
+  const displayName = user?.displayName || 'EstatePerks User';
+  const email = user?.email || 'Logged in via Google';
+  const role = (user as any)?.role || 'user';
 
   const getLevel = () => {
-    if (points >= 150) return 'Gold';
-    if (points >= 50) return 'Silver';
+    const pts = Number(points ?? 0);
+    if (pts >= 150) return 'Gold';
+    if (pts >= 50) return 'Silver';
     return 'Bronze';
   };
 
@@ -50,7 +45,7 @@ export default function ProfileScreen() {
 
         <View style={styles.row}>
           <Text style={styles.label}>Points</Text>
-          <Text style={styles.value}>{points}</Text>
+          <Text style={styles.value}>{points ?? 0}</Text>
         </View>
 
         <View style={styles.row}>
@@ -67,6 +62,24 @@ export default function ProfileScreen() {
         >
           <Text style={styles.actionText}>🏠 Go to Home</Text>
         </TouchableOpacity>
+
+        {role === 'agent' && (
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => router.push('/agent/dashboard')}
+          >
+            <Text style={styles.actionText}>🏢 Agent Dashboard</Text>
+          </TouchableOpacity>
+        )}
+
+        {role === 'admin' && (
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => router.push('/dashboard')}
+          >
+            <Text style={styles.actionText}>🛡️ Admin Panel</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[styles.actionBtn, styles.logoutBtn]}

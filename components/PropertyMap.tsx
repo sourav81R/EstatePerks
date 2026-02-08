@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Platform } from 'react-native';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { PROPERTIES_DATA } from '../constants/propertiesData';
 
 const INITIAL_REGION = {
   latitude: 34.0522,
@@ -11,37 +12,6 @@ const INITIAL_REGION = {
   longitudeDelta: 0.0421,
 };
 
-const MOCK_PROPERTIES = [
-  { 
-    id: '1', 
-    name: 'Modern Loft', 
-    price: '₹ 1.25 Cr', 
-    image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267',
-    coordinate: { latitude: 34.0522, longitude: -118.2437 } 
-  },
-  { 
-    id: '2', 
-    name: 'Sunset Villa', 
-    price: '₹ 2.10 Cr', 
-    image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750',
-    coordinate: { latitude: 34.0622, longitude: -118.2537 } 
-  },
-  { 
-    id: '3', 
-    name: 'Green Residency',
-    price: '₹ 45 Lakhs', 
-    image: 'https://images.unsplash.com/photo-1493809842364-78817add7ffb',
-    coordinate: { latitude: 22.5726, longitude: 88.3639 } 
-  },
-  { 
-    id: '4', 
-    name: 'Goa Palms Villa', 
-    price: '₹ 45 Lakhs', 
-    image: 'https://images.unsplash.com/photo-1493809842364-78817add7ffb',
-    coordinate: { latitude: 15.2993, longitude: 73.9815 } 
-  },
-];
-
 interface PropertyMapProps {
   latitude?: number;
   longitude?: number;
@@ -49,6 +19,13 @@ interface PropertyMapProps {
 
 export default function PropertyMap({ latitude, longitude }: PropertyMapProps) {
   const router = useRouter();
+
+  const properties = React.useMemo(() => 
+    Object.entries(PROPERTIES_DATA).map(([id, data]) => ({
+      id,
+      ...data,
+    })).filter(p => p.coordinates),
+  []);
 
   const region = React.useMemo(() => (
     latitude && longitude 
@@ -65,10 +42,10 @@ export default function PropertyMap({ latitude, longitude }: PropertyMapProps) {
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         showsUserLocation
       >
-        {MOCK_PROPERTIES.map((property) => (
+        {properties.map((property) => (
           <Marker 
             key={property.id} 
-            coordinate={property.coordinate}
+            coordinate={property.coordinates!}
             onCalloutPress={() => 
               router.push(`/property/${property.id}`)
             }

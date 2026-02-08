@@ -1,4 +1,4 @@
-import { Stack, useRouter, usePathname, useRootNavigationState } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { VisitProvider } from '../context/VisitContext';
 import TopNavbar from '../components/TopNavbar';
@@ -6,36 +6,43 @@ import { useEffect } from 'react';
 
 function AppLayout() {
   const { user } = useAuth();
-  const pathname = usePathname();
+  const segments = useSegments();
   const router = useRouter();
   const navigationState = useRootNavigationState();
 
-  const isAuthRoute = pathname?.startsWith('/auth');
+  const isAuthRoute = segments[0] === 'auth';
 
   useEffect(() => {
     if (!navigationState?.key) return;
 
     // 🔐 Not logged in → Redirect to login
     if (!user && !isAuthRoute) {
-      router.replace('/auth/login');
+      // Use a timeout to ensure the navigator is fully mounted before navigating
+      const timer = setTimeout(() => {
+        router.replace('/auth/login');
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [user, isAuthRoute, navigationState?.key]);
+    if (user && isAuthRoute) {
+      router.replace('/');
+    }
+  }, [user, isAuthRoute, navigationState?.key, router]);
 
   return (
-    <VisitProvider>
-      <Stack
-        screenOptions={{
-          header: isAuthRoute ? () => null : () => <TopNavbar />,
-        }}
-      />
-    </VisitProvider>
+    <Stack
+      screenOptions={{
+        header: isAuthRoute ? () => null : () => <TopNavbar />,
+      }}
+    />
   );
 }
 
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <AppLayout />
+      <VisitProvider>
+        <AppLayout />
+      </VisitProvider>
     </AuthProvider>
   );
 }
