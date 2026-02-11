@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import PropertyMap from '../components/PropertyMap';
 
 export default function ExploreScreen() {
+  const { width } = useWindowDimensions();
+  const isSmallMobile = width < 380;
+  const legendWidth = Math.min(220, width - 32);
   const [isHeatmapVisible, setIsHeatmapVisible] = useState(false);
 
   return (
@@ -11,7 +14,7 @@ export default function ExploreScreen() {
       <PropertyMap showHeatmap={isHeatmapVisible} />
 
       {/* Heatmap Controls */}
-      <View style={styles.overlayContainer}>
+      <View style={[styles.overlayContainer, isSmallMobile && styles.overlayContainerSmall]}>
         <TouchableOpacity 
           style={[styles.heatmapToggle, isHeatmapVisible && styles.heatmapToggleActive]}
           onPress={() => setIsHeatmapVisible(!isHeatmapVisible)}
@@ -23,7 +26,7 @@ export default function ExploreScreen() {
         </TouchableOpacity>
 
         {isHeatmapVisible && (
-          <View style={styles.legendCard}>
+          <View style={[styles.legendCard, { width: legendWidth }]}>
             <Text style={styles.legendTitle}>Avg. Price / sqft</Text>
             <View style={styles.legendGradient} />
             <View style={styles.legendLabels}>
@@ -41,6 +44,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   overlayContainer: { position: 'absolute', top: 60, right: 20, alignItems: 'flex-end', gap: 12 },
+  overlayContainerSmall: { top: 52, right: 12 },
   heatmapToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -57,7 +61,7 @@ const styles = StyleSheet.create({
   },
   heatmapToggleActive: { backgroundColor: '#ef4444' },
   heatmapToggleText: { color: '#0f172a', fontWeight: '700', fontSize: 14 },
-  legendCard: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, borderRadius: 16, width: 180, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  legendCard: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   legendTitle: { color: '#fff', fontSize: 11, fontWeight: '800', marginBottom: 8, textTransform: 'uppercase' },
   legendGradient: { height: 8, borderRadius: 4, backgroundColor: 'red', marginBottom: 6, backgroundImage: 'linear-gradient(to right, #22c55e, #fbbf24, #ef4444)' } as any,
   legendLabels: { flexDirection: 'row', justifyContent: 'space-between' },

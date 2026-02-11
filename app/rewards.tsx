@@ -5,9 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   Platform,
   FlatList,
+  useWindowDimensions,
+  DimensionValue,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,8 +16,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useVisit } from '../context/VisitContext';
-
-const { width } = Dimensions.get('window');
 
 /* ---------------- MOCK DATA ---------------- */
 
@@ -42,6 +41,19 @@ const TRANSACTIONS = [
 
 export default function RewardsScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isSmallMobile = width < 380;
+  const isMobile = width < 768;
+  const isLargeTablet = width >= 1024;
+  const horizontalPadding = isSmallMobile ? 14 : isMobile ? 16 : 24;
+  const rewardsColumns = isLargeTablet ? 3 : isMobile ? 1 : 2;
+  const earnCardWidth: DimensionValue =
+    rewardsColumns === 1
+      ? '100%'
+      : rewardsColumns === 2
+      ? '48%'
+      : '31.5%';
+
   const { points: rawPoints } = useVisit();
   const points = Number(rawPoints ?? 0);
   const [activeTab, setActiveTab] = useState('Earn');
@@ -56,7 +68,7 @@ export default function RewardsScreen() {
   const renderEarnItem = ({ item, index }: any) => (
     <Animated.View 
       entering={FadeInUp.delay(index * 100)}
-      style={styles.earnCard}
+      style={[styles.earnCard, { width: earnCardWidth }]}
     >
       <View style={[styles.iconContainer, { backgroundColor: `${item.color}20` }]}>
         <Ionicons name={item.icon} size={24} color={item.color} />
@@ -97,7 +109,11 @@ export default function RewardsScreen() {
           colors={['#0ea5e9', '#22d3ee']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
+          style={[
+            styles.headerGradient,
+            { paddingHorizontal: horizontalPadding },
+            isSmallMobile && styles.headerGradientSmall,
+          ]}
         >
           <View style={styles.headerTop}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -124,7 +140,7 @@ export default function RewardsScreen() {
         </LinearGradient>
 
         {/* Tier Progress Card */}
-        <View style={styles.progressCard}>
+        <View style={[styles.progressCard, { marginHorizontal: horizontalPadding }]}>
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Next Tier: <Text style={styles.platinumText}>{tierInfo.next}</Text></Text>
             <Text style={styles.pointsRemaining}>{tierInfo.target - points} pts to go</Text>
@@ -138,7 +154,7 @@ export default function RewardsScreen() {
         </View>
 
         {/* Tabs */}
-        <View style={styles.tabContainer}>
+        <View style={[styles.tabContainer, { marginHorizontal: horizontalPadding }]}>
           {['Earn', 'Redeem', 'History'].map((tab) => (
             <TouchableOpacity 
               key={tab} 
@@ -151,15 +167,16 @@ export default function RewardsScreen() {
         </View>
 
         {/* Content Based on Tab */}
-        <View style={styles.contentPadding}>
+        <View style={[styles.contentPadding, { paddingHorizontal: horizontalPadding }]}>
           {activeTab === 'Earn' && (
             <FlatList
               data={EARN_OPTIONS}
               renderItem={renderEarnItem}
               keyExtractor={(item) => item.id}
-              numColumns={2}
+              numColumns={rewardsColumns}
+              key={rewardsColumns}
               scrollEnabled={false}
-              columnWrapperStyle={styles.earnRow}
+              columnWrapperStyle={rewardsColumns > 1 ? styles.earnRow : undefined}
             />
           )}
 
@@ -194,7 +211,7 @@ export default function RewardsScreen() {
         </View>
 
         {/* Referral Banner */}
-        <TouchableOpacity style={styles.referralBanner}>
+        <TouchableOpacity style={[styles.referralBanner, { marginHorizontal: horizontalPadding }]}>
           <LinearGradient
             colors={['#1e293b', '#0f172a']}
             style={styles.referralGradient}
@@ -286,7 +303,6 @@ const styles = StyleSheet.create({
   earnRow: { justifyContent: 'space-between' },
   earnCard: {
     backgroundColor: '#0f172a',
-    width: (width - 64) / 2,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
@@ -338,4 +354,7 @@ const styles = StyleSheet.create({
   referralTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
   referralSub: { color: '#94a3b8', fontSize: 13, marginTop: 4 },
   codeText: { color: '#22d3ee', fontWeight: '800' },
+  headerGradientSmall: {
+    paddingBottom: 30,
+  },
 });

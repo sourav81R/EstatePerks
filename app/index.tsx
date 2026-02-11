@@ -80,11 +80,15 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   
-  const isLargeScreen = width >= 1024;
-  const isTablet = width >= 768 && width < 1024;
+  const isLargeScreen = width >= 1200;
+  const isTablet = width >= 768 && width < 1200;
   const isMobile = width < 768;
   const isSmallMobile = width < 380;
+  const isCompactMobile = width < 480;
   const numColumns = isLargeScreen ? 3 : isTablet ? 2 : 1;
+  const listPadding = Platform.OS === 'web' ? 20 : 16;
+  const mobileGutter = isSmallMobile ? 12 : 16;
+  const mobileCarouselCardWidth = Math.min(340, width - mobileGutter * 2 - 8);
 
   const flatListRef = useRef<FlatList>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -236,19 +240,21 @@ export default function HomeScreen() {
     <Pressable 
       style={({ hovered }) => [
         styles.card, 
-        { width: numColumns === 3 ? '31.5%' : numColumns === 2 ? '48.5%' : '100%' },
+        isMobile && styles.cardCompact,
+        isMobile && { marginHorizontal: mobileGutter },
+        { width: numColumns === 1 ? undefined : numColumns === 2 ? '48.5%' : '31.5%' },
         hovered && Platform.OS === 'web' && styles.cardHover
       ]}
       onPress={() => router.push(`/property/${item.id}`)}
     >
-      <Image source={{ uri: item.image }} style={styles.image} contentFit="cover" />
+      <Image source={{ uri: item.image }} style={[styles.image, isMobile && styles.imageCompact]} contentFit="cover" />
       <View style={styles.matchBadge}>
         <Ionicons name="flash" size={10} color="#020617" />
         <Text style={styles.matchBadgeText}>{item.matchScore}% Match</Text>
       </View>
-      <View style={styles.info}>
+      <View style={[styles.info, isMobile && styles.infoMobile]}>
         <View style={styles.headerRow}>
-          <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+          <Text style={[styles.name, isMobile && styles.nameMobile]} numberOfLines={1}>{item.name}</Text>
           <View style={styles.ratingBadge}>
             <Ionicons name="star" size={12} color="#fbbf24" />
             <Text style={styles.ratingText}>4.8</Text>
@@ -259,19 +265,19 @@ export default function HomeScreen() {
           <Text style={styles.location} numberOfLines={1}>{item.location}</Text>
         </View>
         <View style={styles.footerRow}>
-          <Text style={styles.price}>{item.price}</Text>
+          <Text style={[styles.price, isMobile && styles.priceMobile]}>{item.price}</Text>
           <Text style={styles.sqft}>{item.sqft} sqft</Text>
         </View>
-        <View style={styles.cardActions}>
+        <View style={[styles.cardActions, isSmallMobile && styles.cardActionsStack]}>
           <TouchableOpacity 
-            style={styles.viewDetailsBtn}
+            style={[styles.viewDetailsBtn, isMobile && { paddingVertical: 8 }, isSmallMobile && styles.actionBtnStack]}
             onPress={() => router.push({ pathname: '/property/[id]', params: { id: item.id } } as any)}
           >
             <Text style={styles.viewDetailsText}>View Details</Text>
           </TouchableOpacity>
           {item.rooms && item.rooms.length > 0 && (
             <TouchableOpacity 
-              style={styles.virtualTourBtn}
+              style={[styles.virtualTourBtn, isMobile && { paddingVertical: 8 }, isSmallMobile && styles.actionBtnStack]}
               onPress={() => router.push({ pathname: '/property/[id]', params: { id: item.id, virtualTour: 'true' } } as any)}
             >
               <Ionicons name="scan-outline" size={16} color="#22d3ee" />
@@ -294,16 +300,22 @@ export default function HomeScreen() {
         renderItem={renderProperty}
         keyExtractor={item => item.id}
         numColumns={numColumns}
-        contentContainerStyle={[styles.list, isLargeScreen && styles.listLarge]}
+        contentContainerStyle={[
+          styles.list, 
+          isLargeScreen && styles.listLarge,
+          !isMobile && { padding: listPadding },
+          isMobile && { paddingBottom: 80 }
+        ]}
         columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : null}
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={styles.header} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
-            <View style={[styles.headerTop, !isLargeScreen && { flexWrap: 'wrap' }]}>
+          <View style={[styles.header, isMobile && styles.headerMobile]} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+            <View style={[styles.headerTop, isMobile && styles.headerStack, isMobile && { paddingHorizontal: mobileGutter }]}>
               {!isPropertiesView ? (
                 <View style={{ flex: isLargeScreen ? 1 : undefined, width: isLargeScreen ? 'auto' : '100%' }}>
                   <Animated.Text 
                     entering={FadeInDown.duration(1000).springify()}
-                    style={[styles.welcome, isSmallMobile && { fontSize: 24 }]}
+                    style={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall]}
                   >
                   {"Find your dream home".split('').map((char, index) => (
                     <ShimmerChar 
@@ -312,13 +324,13 @@ export default function HomeScreen() {
                       index={index} 
                       total={20} 
                       isAccent={index >= 10}
-                      baseStyle={[styles.welcome, isSmallMobile && { fontSize: 24 }]}
+                      baseStyle={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall]}
                     />
                   ))}
                   </Animated.Text>
                   <Animated.Text 
                     entering={FadeInDown.delay(200).duration(1000).springify()}
-                    style={[styles.subtitle, isSmallMobile && { fontSize: 14 }]}
+                    style={[styles.subtitle, isMobile && styles.subtitleMobile, isSmallMobile && styles.subtitleSmall]}
                   >
                     Handpicked premium properties for you
                   </Animated.Text>
@@ -336,9 +348,9 @@ export default function HomeScreen() {
                     style={styles.heroCTAContainer}
                   >
                     <Text style={styles.heroCTAText}>Buy • Rent • Invest in top cities</Text>
-                    <View style={styles.heroCTAButtons}>
+                    <View style={[styles.heroCTAButtons, isMobile && styles.ctaWrap]}>
                       <TouchableOpacity 
-                        style={[styles.heroCTAButton, selectedIntent === 'Buy' && styles.heroCTAButtonActive]}
+                        style={[styles.heroCTAButton, isMobile && { paddingHorizontal: 16, paddingVertical: 8 }, selectedIntent === 'Buy' && styles.heroCTAButtonActive]}
                         onPress={() => {
                           setSelectedIntent('Buy');
                           scrollToProperties();
@@ -347,7 +359,7 @@ export default function HomeScreen() {
                         <Text style={[styles.heroCTAButtonText, selectedIntent === 'Buy' && styles.heroCTAButtonTextActive]}>Buy</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
-                        style={[styles.heroCTAButton, selectedIntent === 'Rent' && styles.heroCTAButtonActive]}
+                        style={[styles.heroCTAButton, isMobile && { paddingHorizontal: 16, paddingVertical: 8 }, selectedIntent === 'Rent' && styles.heroCTAButtonActive]}
                         onPress={() => {
                           setSelectedIntent('Rent');
                           scrollToProperties();
@@ -356,7 +368,7 @@ export default function HomeScreen() {
                         <Text style={[styles.heroCTAButtonText, selectedIntent === 'Rent' && styles.heroCTAButtonTextActive]}>Rent</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
-                        style={[styles.heroCTAButton, selectedIntent === 'New Projects' && styles.heroCTAButtonActive]}
+                        style={[styles.heroCTAButton, isMobile && { paddingHorizontal: 16, paddingVertical: 8 }, selectedIntent === 'New Projects' && styles.heroCTAButtonActive]}
                         onPress={() => {
                           setSelectedIntent('New Projects');
                           scrollToProperties();
@@ -374,15 +386,14 @@ export default function HomeScreen() {
                 </View>
               )}
               {hasActiveFilters && (
-                <TouchableOpacity onPress={clearAllFilters} style={[styles.clearButton, isMobile && { marginTop: 12 }]}>
+                <TouchableOpacity onPress={clearAllFilters} style={[styles.clearButton, isMobile && { marginTop: 12, alignSelf: 'flex-start' }]}>
                   <Text style={styles.clearButtonText}>Clear All</Text>
                 </TouchableOpacity>
               )}
             </View>
-            <View style={styles.searchContainer}>
+            <View style={[styles.searchContainer, isMobile && { marginTop: 16, marginHorizontal: mobileGutter }]}>
               <Ionicons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
               <TextInput
-                style={styles.searchInput}
                 placeholder="Search by location or property name..."
                 placeholderTextColor="#64748b"
                 value={searchQuery}
@@ -398,16 +409,16 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.trendingSection}>
-              <Text style={styles.featuredTitle}>Trending Localities</Text>
+              <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: mobileGutter }]}>Trending Localities</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.trendingScroll}
+                contentContainerStyle={[styles.trendingScroll, isMobile && { paddingHorizontal: mobileGutter }]}
               >
                 {TRENDING_LOCALITIES.map((item) => (
                   <TouchableOpacity 
                     key={item.id} 
-                    style={styles.localityItem}
+                    style={[styles.localityItem, isMobile && { marginRight: 14, width: 72 }]}
                     onPress={() => setSearchQuery(item.name)}
                   >
                     <View style={styles.localityIcon}>
@@ -421,18 +432,18 @@ export default function HomeScreen() {
 
             {!isPropertiesView && featuredProperties.length > 0 && !hasActiveFilters && (
               <View style={styles.featuredSection}>
-                <Text style={styles.featuredTitle}>Featured Properties</Text>
+                <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: mobileGutter }]}>Featured Properties</Text>
                 <ScrollView 
                   horizontal 
                   showsHorizontalScrollIndicator={false} 
-                  contentContainerStyle={styles.featuredContent}
+                  contentContainerStyle={[styles.featuredContent, isMobile && { paddingHorizontal: mobileGutter }]}
                 >
                   {featuredProperties.map(item => (
                     <Pressable 
                       key={item.id} 
                       style={({ hovered }) => [
                         styles.featuredCard, 
-                        { width: isLargeScreen ? 350 : isTablet ? 300 : width * 0.75 },
+                        { width: isLargeScreen ? 350 : isTablet ? 300 : mobileCarouselCardWidth },
                         hovered && Platform.OS === 'web' && styles.featuredCardHover
                       ]}
                       onPress={() => router.push(`/property/${item.id}`)}
@@ -459,7 +470,7 @@ export default function HomeScreen() {
               horizontal 
               showsHorizontalScrollIndicator={false} 
               style={styles.cityFilterContainer}
-              contentContainerStyle={styles.cityFilterContent}
+              contentContainerStyle={[styles.cityFilterContent, isMobile && { paddingHorizontal: mobileGutter }]}
             >
               {cities.map(city => (
                 <Pressable 
@@ -477,17 +488,18 @@ export default function HomeScreen() {
             </ScrollView>
 
             <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Filter by BHK:</Text>
+              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: mobileGutter }]}>Filter by BHK:</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.filterContent}
+                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: mobileGutter }]}
               >
                 {['All', '1 BHK', '2 BHK', '3 BHK', '4+ BHK'].map(bhk => (
                   <Pressable 
                     key={bhk} 
                     style={({ hovered }) => [
                       styles.filterChip, 
+                      isMobile && { paddingVertical: 10, paddingHorizontal: 16 },
                       selectedBHK === bhk && styles.filterChipActive,
                       hovered && Platform.OS === 'web' && selectedBHK !== bhk && styles.chipHover
                     ]}
@@ -500,17 +512,18 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Property Type:</Text>
+              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: mobileGutter }]}>Property Type:</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.filterContent}
+                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: mobileGutter }]}
               >
                 {['All', 'Apartment', 'Villa'].map(type => (
                   <Pressable 
                     key={type} 
                     style={({ hovered }) => [
                       styles.filterChip, 
+                      isMobile && { paddingVertical: 10, paddingHorizontal: 16 },
                       selectedType === type && styles.filterChipActive,
                       hovered && Platform.OS === 'web' && selectedType !== type && styles.chipHover
                     ]}
@@ -523,11 +536,11 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.sortSection}>
-              <Text style={styles.sortLabel}>Sort by Price:</Text>
+              <Text style={[styles.sortLabel, isMobile && { paddingHorizontal: mobileGutter }]}>Sort by Price:</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.sortContent}
+                contentContainerStyle={[styles.sortContent, isMobile && { paddingHorizontal: mobileGutter }]}
               >
                 {[
                   { label: 'Default', value: 'default' },
@@ -538,6 +551,7 @@ export default function HomeScreen() {
                     key={option.value} 
                     style={({ hovered }) => [
                       styles.sortChip, 
+                      isMobile && { paddingVertical: 10, paddingHorizontal: 16 },
                       sortBy === option.value && styles.sortChipActive,
                       hovered && Platform.OS === 'web' && sortBy !== option.value && styles.chipHover
                     ]}
@@ -550,18 +564,18 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.testimonialsSection}>
-              <Text style={styles.featuredTitle}>What Our Clients Say</Text>
+              <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: mobileGutter }]}>What Our Clients Say</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.testimonialsContent}
+                contentContainerStyle={[styles.testimonialsContent, isMobile && { paddingHorizontal: mobileGutter }]}
               >
                 {TESTIMONIALS.map(item => (
                   <Pressable 
                     key={item.id} 
                     style={({ hovered }) => [
                       styles.testimonialCard,
-                      { width: isLargeScreen ? 350 : isTablet ? 300 : width * 0.75 },
+                      { width: isLargeScreen ? 350 : isTablet ? 300 : mobileCarouselCardWidth },
                       hovered && Platform.OS === 'web' && styles.testimonialCardHover
                     ]}
                   >
@@ -588,13 +602,17 @@ export default function HomeScreen() {
                   </Pressable>
                 ))}
               </ScrollView>
-            </View>)}
+            </View>
           </View>
         }
         ListFooterComponent={
           <LinearGradient
             colors={['#020617', '#0f172a', '#020617']}
-            style={styles.footerContainer}
+            style={[
+              styles.footerContainer, 
+              isMobile && styles.footerContainerMobile,
+              isMobile && { paddingHorizontal: mobileGutter, paddingBottom: 80 }
+            ]}
           >
             <View style={[styles.footerTopSection, !isMobile && { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }]}>
               <View style={[styles.footerBrandSection, !isMobile && { maxWidth: '50%' }]}>
@@ -602,16 +620,16 @@ export default function HomeScreen() {
                 <Text style={styles.footerTagline}>
                   Discover premium residential properties across India's top cities. Your journey to a dream home starts here.
                 </Text>
-                <View style={styles.trustRow}>
+                <View style={[styles.trustRow, isCompactMobile && styles.trustRowCompact]}>
                   <View style={styles.trustItem}><Text style={styles.trustValue}>20k+</Text><Text style={styles.trustLabel}>Families</Text></View>
-                  <View style={styles.trustDivider} />
+                  {!isCompactMobile && <View style={styles.trustDivider} />}
                   <View style={styles.trustItem}><Text style={styles.trustValue}>500+</Text><Text style={styles.trustLabel}>Builders</Text></View>
-                  <View style={styles.trustDivider} />
+                  {!isCompactMobile && <View style={styles.trustDivider} />}
                   <View style={styles.trustItem}><Text style={styles.trustValue}>15+</Text><Text style={styles.trustLabel}>Cities</Text></View>
                 </View>
               </View>
               
-              <View style={[styles.newsletterCard, isMobile && { marginTop: 40 }]}>
+              <View style={[styles.newsletterCard, isMobile && styles.newsletterMobile]}>
                 <Text style={styles.newsletterTitle}>Stay Updated</Text>
                 <Text style={styles.newsletterSubtext}>Subscribe to get the latest property alerts.</Text>
                 {isSubscribed ? (
@@ -620,7 +638,7 @@ export default function HomeScreen() {
                     <Text style={styles.subscribeSuccessText}>Subscribed successfully!</Text>
                   </Animated.View>
                 ) : (
-                  <View style={styles.newsletterInputRow}>
+                  <View style={[styles.newsletterInputRow, isCompactMobile && styles.newsletterInputRowCompact]}>
                     <TextInput 
                       style={styles.newsletterInput} 
                       placeholder="Email Address" 
@@ -630,7 +648,7 @@ export default function HomeScreen() {
                       autoCapitalize="none"
                       keyboardType="email-address"
                     />
-                    <TouchableOpacity style={styles.newsletterBtn} onPress={handleSubscribe}>
+                    <TouchableOpacity style={[styles.newsletterBtn, isCompactMobile && styles.newsletterBtnCompact]} onPress={handleSubscribe}>
                       <Text style={styles.newsletterBtnText}>Subscribe</Text>
                     </TouchableOpacity>
                   </View>
@@ -655,8 +673,8 @@ export default function HomeScreen() {
 
             <View style={styles.footerDivider} />
 
-            <View style={styles.footerGrid}>
-              <View style={[styles.footerColumn, { width: isLargeScreen ? '23%' : isTablet ? '48%' : '100%', marginBottom: isMobile ? 32 : 0 }]}>
+            <View style={[styles.footerGrid, isCompactMobile && styles.footerGridCompact]}>
+              <View style={[styles.footerColumn, isMobile ? styles.footerColumnMobile : { width: isLargeScreen ? '23%' : '48%' }]}>
                 <Text style={styles.footerSectionTitle}>Quick Links</Text>
                 <Pressable onPress={() => router.push('/')}>
                   {({ hovered }) => (
@@ -680,7 +698,7 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
 
-              <View style={[styles.footerColumn, { width: isLargeScreen ? '23%' : isTablet ? '48%' : '100%', marginBottom: isMobile ? 32 : 0 }]}>
+              <View style={[styles.footerColumn, isMobile ? styles.footerColumnMobile : { width: isLargeScreen ? '23%' : '48%' }]}>
                 <Text style={styles.footerSectionTitle}>Company</Text>
                 <Pressable onPress={() => setIsAboutModalVisible(true)}>
                   {({ hovered }) => (
@@ -704,7 +722,7 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
 
-              <View style={[styles.footerColumn, { width: isLargeScreen ? '23%' : isTablet ? '48%' : '100%', marginBottom: isMobile ? 32 : 0 }]}>
+              <View style={[styles.footerColumn, isMobile ? styles.footerColumnMobile : { width: isLargeScreen ? '23%' : '48%' }]}>
                 <Text style={styles.footerSectionTitle}>Contact Us</Text>
                 <View style={styles.contactItem}>
                   <Ionicons name="location-outline" size={14} color="#94a3b8" />
@@ -720,7 +738,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={[styles.footerColumn, { width: isLargeScreen ? '23%' : isTablet ? '48%' : '100%' }]}>
+              <View style={[styles.footerColumn, isMobile ? styles.footerColumnMobile : { width: isLargeScreen ? '23%' : '48%' }]}>
                 <Text style={styles.footerSectionTitle}>Download App</Text>
                 <Pressable 
                   style={({ hovered }) => [styles.downloadBadge, hovered && Platform.OS === 'web' && styles.downloadBadgeHover]}
@@ -751,7 +769,7 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.socialRow}>
+            <View style={[styles.socialRow, isCompactMobile && styles.socialRowCompact]}>
               {['logo-facebook', 'logo-twitter', 'logo-instagram', 'logo-linkedin'].map((icon) => (
                 <Pressable 
                   key={icon}
@@ -787,6 +805,7 @@ export default function HomeScreen() {
       <Pressable 
         style={({ hovered }) => [
           styles.floatingChatBtn,
+          isCompactMobile && styles.floatingChatBtnCompact,
           hovered && Platform.OS === 'web' && styles.floatingChatBtnHover
         ]}
         onPress={() => setIsChatVisible(true)}
@@ -800,7 +819,7 @@ export default function HomeScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
-          <View style={[styles.modalContent, { height: '70%', maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { height: '70%', maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name="headset" size={24} color="#22d3ee" />
@@ -857,7 +876,7 @@ export default function HomeScreen() {
       {/* About Us Modal */}
       <Modal visible={isAboutModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name="information-circle" size={24} color="#22d3ee" />
@@ -888,7 +907,7 @@ export default function HomeScreen() {
       {/* Careers Modal */}
       <Modal visible={isCareersModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name="briefcase" size={24} color="#22d3ee" />
@@ -931,7 +950,7 @@ export default function HomeScreen() {
       {/* Privacy Policy Modal */}
       <Modal visible={isPrivacyModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name="shield-checkmark" size={24} color="#22d3ee" />
@@ -971,7 +990,7 @@ export default function HomeScreen() {
       {/* Terms of Service Modal */}
       <Modal visible={isTermsModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name="document-text" size={24} color="#22d3ee" />
@@ -1023,7 +1042,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   list: { 
-    padding: Platform.OS === 'web' ? 20 : 16,
     width: '100%',
   },
   listLarge: {
@@ -1035,6 +1053,7 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   header: { marginBottom: 24 },
+  headerMobile: { marginBottom: 16 },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1054,6 +1073,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   welcome: { fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: -1 },
+  welcomeMobile: { fontSize: 26, lineHeight: 32 },
   highlight: { 
     color: '#fbbf24',
     textShadowColor: 'rgba(251, 191, 36, 0.5)',
@@ -1061,6 +1081,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 15,
   },
   subtitle: { color: '#94a3b8', fontSize: 16, marginTop: 4 },
+  subtitleMobile: { fontSize: 14 },
   marketPulse: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1070,6 +1091,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginTop: 16,
     alignSelf: 'flex-start',
+    maxWidth: '100%',
     borderWidth: 1,
     borderColor: 'rgba(34, 211, 238, 0.1)',
   },
@@ -1086,6 +1108,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   heroCTAContainer: {
     marginTop: 24,
@@ -1136,6 +1159,10 @@ const styles = StyleSheet.create({
     elevation: 4,
     overflow: 'hidden',
   },
+  cardMobile: {
+    marginBottom: 16,
+    borderRadius: 16,
+  },
   cardHover: {
     transform: [{ translateY: -8 }],
     borderColor: '#22d3ee',
@@ -1162,7 +1189,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    backdropFilter: 'blur(10px)', // Web only
+    ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(10px)' } as any) : {}),
   },
   searchIcon: { marginRight: 8 },
   searchInput: {
@@ -1214,6 +1241,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+  },
+  cardActionsStack: {
+    flexDirection: 'column',
+  },
+  actionBtnStack: {
+    width: '100%',
   },
   viewDetailsBtn: {
     flex: 1,
@@ -1442,6 +1475,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#22d3ee',
   },
+  footerContainerMobile: {
+    marginTop: 40,
+    paddingTop: 40,
+    paddingBottom: 40,
+  },
   footerTopSection: {
     marginBottom: 60,
   },
@@ -1469,6 +1507,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 24,
     gap: 16,
+  },
+  trustRowCompact: {
+    flexWrap: 'wrap',
+    gap: 12,
   },
   trustItem: {
     alignItems: 'flex-start',
@@ -1518,6 +1560,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  newsletterInputRowCompact: {
+    flexDirection: 'column',
+  },
   newsletterInput: {
     flex: 1,
     backgroundColor: '#020617',
@@ -1535,6 +1580,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  newsletterBtnCompact: {
+    width: '100%',
   },
   newsletterBtnText: {
     color: '#020617',
@@ -1579,6 +1627,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 24,
   },
+  footerGridCompact: {
+    gap: 16,
+  },
   footerColumn: {
   },
   footerSectionTitle: {
@@ -1609,6 +1660,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 20,
     marginBottom: 30,
+  },
+  socialRowCompact: {
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
   },
   socialIcon: {
     width: 40,
@@ -1747,6 +1803,13 @@ const styles = StyleSheet.create({
     zIndex: 100,
     ...(Platform.OS === 'web' ? { transitionProperty: 'all', transitionDuration: '0.2s' } : {}),
   },
+  floatingChatBtnCompact: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    right: 14,
+    bottom: 18,
+  },
   floatingChatBtnHover: {
     transform: [{ scale: 1.1 }],
     backgroundColor: '#67e8f9',
@@ -1765,6 +1828,10 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     borderColor: '#1e293b',
+  },
+  modalContentCompact: {
+    padding: 18,
+    borderRadius: 18,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1876,5 +1943,44 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: '#475569',
+  },
+  // =================== RESPONSIVE ===================
+  headerStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  welcomeSmall: {
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  subtitleSmall: {
+    fontSize: 13,
+  },
+  ctaWrap: {
+    flexWrap: 'wrap',
+  },
+  cardCompact: {
+    borderRadius: 14,
+    marginBottom: 14,
+  },
+  imageCompact: {
+    height: 160,
+  },
+  footerColumnMobile: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  newsletterMobile: {
+    padding: 16,
+  },
+  infoMobile: {
+    padding: 12,
+  },
+  nameMobile: {
+    fontSize: 16,
+  },
+  priceMobile: {
+    fontSize: 16,
   },
 });

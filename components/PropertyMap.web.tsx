@@ -9,6 +9,7 @@ interface PropertyMapProps {
   latitude?: number;
   longitude?: number;
   name?: string;
+  showHeatmap?: boolean;
 }
 
 export default function PropertyMap({ latitude, longitude, name }: PropertyMapProps) {

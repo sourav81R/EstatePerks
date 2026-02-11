@@ -246,6 +246,10 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  headerInfoMobile: {
+    flexDirection: 'column',
+    gap: 12,
+  },
   statusBadge: {
     backgroundColor: 'rgba(34, 211, 238, 0.15)',
     paddingHorizontal: 8,
@@ -262,8 +266,13 @@ export const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: { fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: -1, lineHeight: 38 },
+  titleMobile: { fontSize: 26, lineHeight: 32 },
+  titleSmall: { fontSize: 22, lineHeight: 28 },
   location: { color: '#cbd5e1' },
   price: { fontSize: 30, fontWeight: '900', color: '#22d3ee', letterSpacing: -0.5 },
+  priceMobile: { fontSize: 24 },
+  priceColumn: { alignItems: 'flex-end' },
+  priceColumnMobile: { alignItems: 'flex-start' },
 
   tabBar: {
     marginBottom: 20,
@@ -304,7 +313,14 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 8,
   },
+  specsRowMobile: {
+    flexWrap: 'wrap',
+    gap: 10,
+  },
   specItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  specItemMobile: {
+    width: '48%',
+  },
   specText: {
     color: '#e5e7eb',
     fontSize: 15,
@@ -547,6 +563,15 @@ export const styles = StyleSheet.create({
       web: { boxShadow: '0px -4px 20px rgba(0,0,0,0.5)' }
     }),
   },
+  stickyFooterMobile: {
+    flexDirection: 'column',
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  stickyFooterBtnMobile: {
+    width: '100%',
+    flex: undefined,
+  },
   footerSecondaryBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -578,6 +603,9 @@ export const styles = StyleSheet.create({
     gap: 10,
     justifyContent: 'space-between',
     marginBottom: 24,
+  },
+  toolsRowMobile: {
+    gap: 8,
   },
   toolButton: {
     flexDirection: 'row',
@@ -961,6 +989,14 @@ export const styles = StyleSheet.create({
     borderColor: 'rgba(30, 41, 59, 0.8)',
     borderLeftWidth: 6,
   },
+  sectionCardMobile: {
+    padding: 18,
+    borderRadius: 18,
+  },
+  sectionCardSmall: {
+    padding: 14,
+    borderRadius: 16,
+  },
   sectionCardHover: {
     backgroundColor: 'rgba(30, 41, 59, 0.6)',
     borderColor: 'rgba(34, 211, 238, 0.4)',
@@ -1240,4 +1276,113 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  constructionContainer: {
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    marginBottom: 20,
+  },
+  constructionPhotoCard: {
+    marginRight: 12,
+    width: 140,
+  },
+  constructionPhoto: {
+    width: '100%',
+    height: 90,
+    borderRadius: 10,
+  },
+  constructionMonth: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  progressStatusCard: {
+    backgroundColor: '#020617',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressStatusTitle: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 8,
+  },
+  onTrackBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  onTrackText: {
+    color: '#22c55e',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  progressDetail: {
+    color: '#94a3b8',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  visitTrackerCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    marginBottom: 20,
+  },
+  visitTrackerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  visitTrackerTitle: {
+    color: '#e2e8f0',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  completeVisitBtn: {
+    backgroundColor: '#22d3ee',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  completeVisitBtnText: {
+    color: '#020617',
+    fontWeight: '800',
+  },
+  visitPointsText: {
+    color: '#22c55e',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  feedbackBtn: {
+    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.35)',
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  feedbackBtnText: {
+    color: '#22d3ee',
+    fontWeight: '700',
+  },
 });
+

@@ -9,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,8 @@ import { useAuth } from '../../context/AuthContext';
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useAuth();
+  const { width } = useWindowDimensions();
+  const isSmallMobile = width < 380;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -48,7 +51,7 @@ export default function RegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, isSmallMobile && styles.scrollContentSmall]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -96,11 +99,15 @@ export default function RegisterScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Register as</Text>
-            <View style={styles.roleContainer}>
+            <View style={[styles.roleContainer, isSmallMobile && styles.roleContainerSmall]}>
               {(['user', 'agent', 'admin'] as const).map((r) => (
                 <TouchableOpacity
                   key={r}
-                  style={[styles.roleButton, role === r && styles.roleButtonActive]}
+                  style={[
+                    styles.roleButton,
+                    isSmallMobile && styles.roleButtonSmall,
+                    role === r && styles.roleButtonActive,
+                  ]}
                   onPress={() => setRole(r)}
                 >
                   <Text
@@ -135,6 +142,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#020617' },
   scrollContent: { flexGrow: 1, padding: 24, paddingTop: 60 },
+  scrollContentSmall: { paddingHorizontal: 14, paddingTop: 40 },
   backBtn: { marginBottom: 20 },
   header: { marginBottom: 40 },
   title: { fontSize: 32, fontWeight: '900', color: '#fff', marginBottom: 8 },
@@ -152,6 +160,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   roleContainer: { flexDirection: 'row', gap: 10 },
+  roleContainerSmall: { flexWrap: 'wrap', rowGap: 10 },
   roleButton: {
     flex: 1,
     paddingVertical: 12,
@@ -161,6 +170,7 @@ const styles = StyleSheet.create({
     borderColor: '#1e293b',
     alignItems: 'center',
   },
+  roleButtonSmall: { minWidth: '48%' },
   roleButtonActive: { backgroundColor: '#22d3ee', borderColor: '#22d3ee' },
   roleButtonText: { color: '#94a3b8', fontWeight: '700', fontSize: 14 },
   roleButtonTextActive: { color: '#020617' },

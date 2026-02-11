@@ -27,6 +27,7 @@ type NavProps = {
   active: boolean;
   icon: keyof typeof Ionicons.glyphMap;
   isMobile: boolean;
+  isCompact: boolean;
 };
 
 const ShimmerChar = ({ char, index, total, isAccent, isMobile }: { char: string, index: number, total: number, isAccent: boolean, isMobile: boolean }) => {
@@ -64,6 +65,7 @@ export default function TopNavbar() {
   const { logout } = useAuth(); // ✅ NOW SAFE
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const isCompact = width < 380;
 
   const { view } = useLocalSearchParams<{ view?: string }>();
   const isPropertiesView = view === 'properties';
@@ -105,10 +107,10 @@ export default function TopNavbar() {
   const isActive = (path: string) => pathname === path || (path !== '/' && pathname.startsWith(path));
 
   return (
-    <View style={[styles.container, isMobile && styles.mobileContainer]}>
+    <View style={[styles.container, isMobile && styles.mobileContainer, isCompact && styles.compactContainer]}>
       <TouchableOpacity onPress={() => router.push('/')} style={styles.logoContainer}>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          <Ionicons name="business" size={26} color="#fbbf24" style={styles.logoIcon} />
+          <Ionicons name="business" size={isCompact ? 22 : 26} color="#fbbf24" style={styles.logoIcon} />
         </Animated.View>
         <Animated.View
           style={[
@@ -129,15 +131,15 @@ export default function TopNavbar() {
         </Animated.View>
       </TouchableOpacity>
 
-      <View style={[styles.links, isMobile && styles.mobileLinks]}>
-        <Nav label="Home" path="/" active={pathname === '/' && !isPropertiesView} icon="home" isMobile={isMobile} />
-        <Nav label="Property Details" path="/property/1" active={isPropertiesView || pathname.startsWith('/property')} icon="business" isMobile={isMobile} />
-        <Nav label="Rewards" path="/rewards" active={isActive('/rewards')} icon="gift" isMobile={isMobile} />
-        <Nav label="Explore" path="/explore" active={isActive('/explore')} icon="map" isMobile={isMobile} />
+      <View style={[styles.links, isMobile && styles.mobileLinks, isCompact && styles.compactLinks]}>
+        <Nav label="Home" path="/" active={pathname === '/' && !isPropertiesView} icon="home" isMobile={isMobile} isCompact={isCompact} />
+        <Nav label="Property Details" path="/property/1" active={isPropertiesView || pathname.startsWith('/property')} icon="business" isMobile={isMobile} isCompact={isCompact} />
+        <Nav label="Rewards" path="/rewards" active={isActive('/rewards')} icon="gift" isMobile={isMobile} isCompact={isCompact} />
+        <Nav label="Explore" path="/explore" active={isActive('/explore')} icon="map" isMobile={isMobile} isCompact={isCompact} />
 
-        <TouchableOpacity onPress={logout} style={[styles.logoutBtn, isMobile && styles.mobileLogoutBtn]}>
+        <TouchableOpacity onPress={logout} style={[styles.logoutBtn, isMobile && styles.mobileLogoutBtn, isCompact && styles.compactLogoutBtn]}>
           {isMobile ? (
-            <Ionicons name="log-out-outline" size={20} color="#fecaca" />
+            <Ionicons name="log-out-outline" size={isCompact ? 18 : 20} color="#fecaca" />
           ) : (
             <Text style={styles.logoutText}>Logout</Text>
           )}
@@ -147,7 +149,7 @@ export default function TopNavbar() {
   );
 }
 
-function Nav({ label, path, active, icon, isMobile }: NavProps) {
+function Nav({ label, path, active, icon, isMobile, isCompact }: NavProps) {
   const router = useRouter();
 
   return (
@@ -159,12 +161,13 @@ function Nav({ label, path, active, icon, isMobile }: NavProps) {
           styles.navItem, 
           active && styles.activeItem, 
           isMobile && styles.mobileNavItem,
+          isCompact && styles.compactNavItem,
           hovered && Platform.OS === 'web' && styles.navHover
         ]}>
           {isMobile ? (
             <Ionicons 
               name={icon} 
-              size={22} 
+              size={isCompact ? 20 : 22} 
               color={active ? '#22d3ee' : (hovered && Platform.OS === 'web' ? '#fbbf24' : '#cbd5f5')} 
             />
           ) : (
@@ -196,6 +199,9 @@ const styles = StyleSheet.create({
   mobileContainer: {
     height: 64,
     paddingHorizontal: 16,
+  },
+  compactContainer: {
+    paddingHorizontal: 10,
   },
   logoContainer: {
     flexDirection: 'row',
@@ -234,6 +240,9 @@ const styles = StyleSheet.create({
   mobileLinks: {
     gap: 8,
   },
+  compactLinks: {
+    gap: 4,
+  },
   navItem: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -244,6 +253,10 @@ const styles = StyleSheet.create({
   },
   mobileNavItem: {
     paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  compactNavItem: {
+    paddingHorizontal: 8,
     paddingVertical: 6,
   },
   link: {
@@ -267,6 +280,10 @@ const styles = StyleSheet.create({
   mobileLogoutBtn: {
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  compactLogoutBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 7,
   },
   logoutText: {
     color: '#fecaca',

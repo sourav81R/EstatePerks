@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isSmallMobile = width < 380;
 
   const handleAction = (type: 'Approve' | 'Reject') => {
     Alert.alert(
@@ -18,8 +20,8 @@ export default function AdminDashboard() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <ScrollView style={[styles.container, isSmallMobile && styles.containerSmall]}>
+      <View style={[styles.header, isSmallMobile && styles.headerSmall]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
@@ -35,9 +37,9 @@ export default function AdminDashboard() {
           <Text style={styles.price}>₹ 1.8 Cr</Text>
         </View>
         
-        <View style={styles.actionRow}>
+        <View style={[styles.actionRow, isSmallMobile && styles.actionRowSmall]}>
           <TouchableOpacity 
-            style={[styles.actionBtn, styles.rejectBtn]} 
+            style={[styles.actionBtn, isSmallMobile && styles.actionBtnSmall, styles.rejectBtn]} 
             onPress={() => handleAction('Reject')}
           >
             <Ionicons name="close-circle" size={20} color="#ef4444" />
@@ -45,7 +47,7 @@ export default function AdminDashboard() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.actionBtn, styles.approveBtn]} 
+            style={[styles.actionBtn, isSmallMobile && styles.actionBtnSmall, styles.approveBtn]} 
             onPress={() => handleAction('Approve')}
           >
             <Ionicons name="checkmark-circle" size={20} color="#020617" />
@@ -59,7 +61,9 @@ export default function AdminDashboard() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#020617', padding: 20 },
+  containerSmall: { padding: 14 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 40, marginBottom: 30 },
+  headerSmall: { marginTop: 20, gap: 10, marginBottom: 20 },
   title: { fontSize: 24, fontWeight: '800', color: '#fff' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#94a3b8', marginBottom: 20 },
   reviewCard: { 
@@ -74,6 +78,7 @@ const styles = StyleSheet.create({
   agentName: { color: '#64748b', fontSize: 14, marginTop: 4 },
   price: { color: '#22d3ee', fontSize: 16, fontWeight: '800', marginTop: 8 },
   actionRow: { flexDirection: 'row', gap: 12 },
+  actionRowSmall: { flexWrap: 'wrap' },
   actionBtn: { 
     flex: 1, 
     flexDirection: 'row', 
@@ -82,6 +87,9 @@ const styles = StyleSheet.create({
     gap: 8, 
     paddingVertical: 12, 
     borderRadius: 12 
+  },
+  actionBtnSmall: {
+    minWidth: '100%',
   },
   rejectBtn: { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#ef4444' },
   rejectText: { color: '#ef4444', fontWeight: '700' },

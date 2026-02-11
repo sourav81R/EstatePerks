@@ -15,6 +15,7 @@ const INITIAL_REGION = {
 interface PropertyMapProps {
   latitude?: number;
   longitude?: number;
+  showHeatmap?: boolean;
 }
 
 export default function PropertyMap({ latitude, longitude }: PropertyMapProps) {

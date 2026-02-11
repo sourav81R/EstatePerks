@@ -22,6 +22,9 @@ import {
   Pressable,
   Linking,
   useWindowDimensions,
+  type DimensionValue,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 
 import { useLocalSearchParams, useRouter, useRootNavigationState } from 'expo-router';
@@ -170,17 +173,28 @@ export default function PropertyDetails() {
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const { addVisit } = useVisit();
+  const { addVisit } = useVisit() as { addVisit?: (visit: any) => void };
   const { width: windowWidth } = useWindowDimensions();
+  const isTablet = windowWidth >= 768;
+  const isMobile = windowWidth < 768;
+  const isSmallMobile = windowWidth < 420;
+  const contentPadding = isSmallMobile ? 12 : isMobile ? 16 : 20;
+  const chartWidth = Math.max(windowWidth - (isSmallMobile ? 56 : isMobile ? 72 : 80), 220);
 
-  const toolButtonStyle = [
+  const toolButtonStyle: StyleProp<ViewStyle> = [
     styles.toolButton,
-    { width: Platform.OS === 'web' && windowWidth > 768 ? '31%' : '48%' }
+    { width: (isSmallMobile ? '100%' : Platform.OS === 'web' && windowWidth > 1024 ? '31%' : '48%') as DimensionValue }
   ];
 
-  const overviewItemStyle = [
+  const overviewItemStyle: StyleProp<ViewStyle> = [
     styles.overviewItem,
-    { width: windowWidth > 600 ? '24%' : '48%' }
+    { width: (isSmallMobile ? '100%' : windowWidth > 600 ? '24%' : '48%') as DimensionValue }
+  ];
+
+  const sectionCardBaseStyle: StyleProp<ViewStyle> = [
+    styles.sectionCard,
+    isMobile && styles.sectionCardMobile,
+    isSmallMobile && styles.sectionCardSmall,
   ];
 
   const property: Property =
@@ -200,7 +214,7 @@ export default function PropertyDetails() {
 
   const [showControls, setShowControls] = useState(true);
   const [doubleTapSide, setDoubleTapSide] = useState<'left' | 'right' | null>(null);
-  const controlsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Pulse Animation for Virtual Tour Label
   const pulseOpacity = useSharedValue(1);
@@ -498,21 +512,17 @@ export default function PropertyDetails() {
       }
     }, 500);
 
-    const statusSub = player.addListener('statusChange', (payload) => {
+    const statusSub = player.addListener('statusChange', (payload: any) => {
       setIsBuffering(payload.status === 'loading');
       setHasError(payload.status === 'error');
     });
-    const playingSub = player.addListener('playingChange', (payload) => {
+    const playingSub = player.addListener('playingChange', (payload: any) => {
       setIsPlaying(payload.isPlaying);
-    });
-    const bufferSub = player.addListener('bufferingChange', (payload) => {
-      setIsBuffering(payload.isBuffering);
     });
     return () => {
       clearInterval(interval);
       statusSub.remove();
       playingSub.remove();
-      bufferSub.remove();
     };
   }, [player]);
 
@@ -586,7 +596,7 @@ export default function PropertyDetails() {
         },
         onPanResponderRelease: (_, { dy }) => {
           if (dy < -60) {
-            player.presentFullscreen(); // Swipe Up -> Fullscreen
+            resetControlsTimer(); // Swipe Up -> show controls
           } else if (dy > 60) {
             setViewMode('image'); // Swipe Down -> Exit Video Mode
           }
@@ -706,13 +716,14 @@ export default function PropertyDetails() {
     };
   }, [property.price, property.sqft, property.avgPrice]);
 
-  const handleAIChat = () => {
-    if (!chatInput.trim()) return;
-    
-    const userMsg = { id: Date.now().toString(), text: chatInput, sender: 'user' };
+  const handleAIChat = (input?: any) => {
+    const message = typeof input === 'string' ? input : chatInput;
+    if (!message.trim()) return;
+
+    const userMsg = { id: Date.now().toString(), text: message, sender: 'user' };
     setChatMessages(prev => [...prev, userMsg]);
-    const currentInput = chatInput;
-    setChatInput('');
+    const currentInput = message;
+    if (typeof input !== 'string') setChatInput('');
     
     setTimeout(() => {
       let response = "I'm not sure about that. Would you like to speak with an agent?";
@@ -746,7 +757,12 @@ export default function PropertyDetails() {
 
   const handleCompleteVisit = () => {
     setVisitStatus('completed');
-    if (addVisit) addVisit(500); // Reward points
+    addVisit?.({
+      id: `visit_${Date.now()}`, 
+      name: property.name,
+      date: new Date().toISOString(),
+      rewardPoints: 500,
+    });
     setIsFeedbackModalVisible(true);
   };
 
@@ -1094,7 +1110,7 @@ export default function PropertyDetails() {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.controlButton} 
-              onPress={() => player.presentFullscreen()}
+              onPress={resetControlsTimer}
             >
               <Ionicons name="expand" size={18} color="#fff" />
             </TouchableOpacity>
@@ -1286,7 +1302,7 @@ export default function PropertyDetails() {
           horizontal 
           showsHorizontalScrollIndicator={false} 
           style={styles.tabBar}
-          contentContainerStyle={[styles.tabBarContent, { paddingHorizontal: 20 }]}
+          contentContainerStyle={[styles.tabBarContent, { paddingHorizontal: contentPadding }]}
         >
           {['Overview', 'Config', 'Amenities', 'Locality', 'Builder', 'FAQ'].map((tab) => (
             <TouchableOpacity 
@@ -1301,8 +1317,8 @@ export default function PropertyDetails() {
 
         {activeTab === 'Overview' && (
           <>
-        <Pressable style={({ hovered }: any) => [styles.sectionCard, { borderLeftColor: '#22d3ee' }, hovered && styles.sectionCardHover]}>
-          <View style={styles.headerInfo}>
+        <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#22d3ee' }, hovered && styles.sectionCardHover]}>
+          <View style={[styles.headerInfo, isMobile && styles.headerInfoMobile]}>
           <View style={{ flex: 1, gap: 4 }}>
             <View style={styles.statusBadge}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1310,11 +1326,11 @@ export default function PropertyDetails() {
                 <Text style={styles.statusText}>{property.status} • Verified</Text>
               </View>
             </View>
-            <Text style={styles.title}>{property.name}</Text>
+            <Text style={[styles.title, isMobile && styles.titleMobile, isSmallMobile && styles.titleSmall]}>{property.name}</Text>
             <Text style={styles.location}>{property.location}</Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.price}>{property.price}</Text>
+          <View style={[styles.priceColumn, isMobile && styles.priceColumnMobile]}>
+            <Text style={[styles.price, isMobile && styles.priceMobile]}>{property.price}</Text>
             {priceFairness && (
               <View style={styles.fairnessBadge}>
                 <Ionicons name={priceFairness.isFair ? "checkmark-circle" : "alert-circle"} size={12} color={priceFairness.isFair ? "#22c55e" : "#fbbf24"} />
@@ -1352,7 +1368,7 @@ export default function PropertyDetails() {
           </View>
         </Pressable>
 
-        <Pressable style={({ hovered }: any) => [styles.sectionCard, { borderLeftColor: '#818cf8' }, hovered && styles.sectionCardHover]}>
+        <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#818cf8' }, hovered && styles.sectionCardHover]}>
           <Text style={styles.sectionTitle}>Overview</Text>
           <View style={styles.overviewGrid}>
           <View style={overviewItemStyle}>
@@ -1385,16 +1401,16 @@ export default function PropertyDetails() {
           </View>
         </View>
 
-        <View style={styles.specsRow}>
-          <View style={styles.specItem}>
+        <View style={[styles.specsRow, isSmallMobile && styles.specsRowMobile]}>
+          <View style={[styles.specItem, isSmallMobile && styles.specItemMobile]}>
             <Ionicons name="bed" size={18} color="#94a3b8" />
             <Text style={styles.specText}>{property.beds} Beds</Text>
           </View>
-          <View style={styles.specItem}>
+          <View style={[styles.specItem, isSmallMobile && styles.specItemMobile]}>
             <Ionicons name="water" size={18} color="#94a3b8" />
             <Text style={styles.specText}>{property.baths} Baths</Text>
           </View>
-          <View style={styles.specItem}>
+          <View style={[styles.specItem, isSmallMobile && styles.specItemMobile]}>
             <Ionicons name="resize" size={18} color="#94a3b8" />
             <Text style={styles.specText}>{property.sqft} sqft</Text>
           </View>
@@ -1404,7 +1420,7 @@ export default function PropertyDetails() {
         <View style={styles.divider} />
 
         {property.highlights && (
-          <Pressable style={({ hovered }: any) => [styles.sectionCard, { borderLeftColor: '#10b981' }, hovered && styles.sectionCardHover]}>
+          <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#10b981' }, hovered && styles.sectionCardHover]}>
             <Text style={styles.sectionTitle}>Project Highlights</Text>
             <View style={styles.highlightsContainer}>
               {property.highlights.map((h, i) => (
@@ -1420,7 +1436,7 @@ export default function PropertyDetails() {
         )}
 
         {activeTab === 'Config' && (
-          <Pressable style={({ hovered }: any) => [styles.sectionCard, { borderLeftColor: '#f59e0b' }, hovered && styles.sectionCardHover]}>
+          <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#f59e0b' }, hovered && styles.sectionCardHover]}>
             <Text style={styles.sectionTitle}>Unit Configurations</Text>
             <View style={styles.configTable}>
               <View style={styles.configHeader}>
@@ -1444,7 +1460,7 @@ export default function PropertyDetails() {
         )}
 
         {activeTab === 'Overview' && (
-          <Pressable style={({ hovered }: any) => [styles.sectionCard, { borderLeftColor: '#f43f5e' }, hovered && styles.sectionCardHover]}>
+          <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#f43f5e' }, hovered && styles.sectionCardHover]}>
             <Text style={styles.sectionTitle}>Key Features</Text>
             <View style={styles.featuresGrid}>
             {property.features.map((f: PropertyFeature, i: number) => (
@@ -1458,7 +1474,7 @@ export default function PropertyDetails() {
         )}
 
         {activeTab === 'Amenities' && property.amenities && (
-          <Pressable style={({ hovered }: any) => [styles.sectionCard, { borderLeftColor: '#8b5cf6' }, hovered && styles.sectionCardHover]}>
+          <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#8b5cf6' }, hovered && styles.sectionCardHover]}>
             <Text style={styles.sectionTitle}>Amenities</Text>
             <View style={styles.amenitiesContainer}>
               {Object.entries(property.amenities).map(([category, items], idx) => (
@@ -1480,7 +1496,7 @@ export default function PropertyDetails() {
 
         {activeTab === 'Builder' && (
           <>
-          <Pressable style={({ hovered }: any) => [styles.sectionCard, { borderLeftColor: '#0ea5e9' }, hovered && styles.sectionCardHover]}>
+          <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#0ea5e9' }, hovered && styles.sectionCardHover]}>
             <Text style={styles.sectionTitle}>Builder Profile</Text>
             <View style={styles.builderProfileCard}>
             <View style={styles.builderHeader}>
@@ -1737,7 +1753,7 @@ export default function PropertyDetails() {
         </>
         )}
 
-        <View style={styles.toolsRow}>
+        <View style={[styles.toolsRow, isSmallMobile && styles.toolsRowMobile]}>
           <TouchableOpacity 
             style={toolButtonStyle}
             onPress={() => setIsVirtualTourVisible(true)}
@@ -1804,10 +1820,10 @@ export default function PropertyDetails() {
             <LineChart
               data={chartData}
               height={160}
-              width={windowWidth - 80}
+              width={chartWidth}
               initialSpacing={15}
               endSpacing={15}
-              spacing={chartData.length > 1 ? (windowWidth - 120) / (chartData.length - 1) : 0}
+              spacing={chartData.length > 1 ? Math.max((chartWidth - 40) / (chartData.length - 1), 20) : 0}
               color="#22d3ee"
               thickness={4}
               yAxisLabelWidth={60}
@@ -1825,7 +1841,6 @@ export default function PropertyDetails() {
               isAnimated
               animationDuration={1200}
               areaChart
-              LinearGradient={LinearGradient}
               startFillColor="rgba(34, 211, 238, 0.3)"
               endFillColor="rgba(34, 211, 238, 0.01)"
               curved
@@ -1837,8 +1852,6 @@ export default function PropertyDetails() {
                 pointerStripWidth: 2,
                 pointerColor: '#22d3ee',
                 radius: 6,
-                pointerLabelFixed: false,
-                activatePointersOnTap: true,
                 pointerLabelComponent: (items: any) => (
                   <View style={styles.chartPointerLabel}>
                     <Text style={styles.chartPointerText}>₹{items[0].value} {priceUnit}</Text>
@@ -3128,12 +3141,12 @@ export default function PropertyDetails() {
     </ParallaxScrollView>
 
     {/* Sticky Footer - Square Yards Style */}
-    <View style={styles.stickyFooter}>
-      <TouchableOpacity style={styles.footerSecondaryBtn} onPress={handleWhatsAppShare}>
+    <View style={[styles.stickyFooter, isSmallMobile && styles.stickyFooterMobile]}>
+      <TouchableOpacity style={[styles.footerSecondaryBtn, isSmallMobile && styles.stickyFooterBtnMobile]} onPress={handleWhatsAppShare}>
         <Ionicons name="logo-whatsapp" size={20} color="#22c55e" />
         <Text style={styles.footerSecondaryText}>WhatsApp</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.footerPrimaryBtn} onPress={() => setIsCallbackVisible(true)}>
+      <TouchableOpacity style={[styles.footerPrimaryBtn, isSmallMobile && styles.stickyFooterBtnMobile]} onPress={() => setIsCallbackVisible(true)}>
         <Ionicons name="call" size={20} color="#020617" />
         <Text style={styles.footerPrimaryText}>Contact Seller</Text>
       </TouchableOpacity>
@@ -3141,3 +3154,9 @@ export default function PropertyDetails() {
     </View>
   );
 }
+
+
+
+
+
+

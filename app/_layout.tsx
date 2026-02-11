@@ -5,7 +5,7 @@ import TopNavbar from '../components/TopNavbar';
 import { useEffect } from 'react';
 
 function AppLayout() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const navigationState = useRootNavigationState();
@@ -13,7 +13,7 @@ function AppLayout() {
   const isAuthRoute = segments[0] === 'auth';
 
   useEffect(() => {
-    if (!navigationState?.key) return;
+    if (!navigationState?.key || authLoading) return;
 
     // 🔐 Not logged in → Redirect to login
     if (!user && !isAuthRoute) {
@@ -26,7 +26,7 @@ function AppLayout() {
     if (user && isAuthRoute) {
       router.replace('/');
     }
-  }, [user, isAuthRoute, navigationState?.key, router]);
+  }, [user, isAuthRoute, navigationState?.key, router, authLoading]);
 
   return (
     <Stack
