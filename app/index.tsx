@@ -48,6 +48,12 @@ const TRENDING_LOCALITIES = [
   { id: '6', name: 'Powai', icon: 'water' },
 ];
 
+const PLATFORM_HIGHLIGHTS = [
+  { id: 'verified', icon: 'shield-checkmark-outline', label: '100% verified property inventory' },
+  { id: 'tours', icon: 'scan-outline', label: 'Immersive 360 virtual walkthroughs' },
+  { id: 'advisory', icon: 'analytics-outline', label: 'AI-backed pricing and ROI insights' },
+];
+
 const SAVED_PROPERTIES_STORAGE_KEY = 'estateperks:savedProperties:v1';
 const MAX_COMPARE_PROPERTIES = 3;
 
@@ -83,14 +89,16 @@ const ShimmerChar = ({ char, index, total, isAccent, baseStyle }: { char: string
 export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  
+
   const isLargeScreen = width >= 1200;
   const isTablet = width >= 768 && width < 1200;
+  const isTabletWide = width >= 960 && width < 1200;
   const isMobile = width < 768;
   const isSmallMobile = width < 380;
   const isCompactMobile = width < 480;
   const isXsMobile = width < 360;
-  const numColumns = isLargeScreen ? 3 : isTablet ? 2 : 1;
+  const showHeroInsightsPanel = width >= 1080;
+  const numColumns = isLargeScreen ? 3 : isTabletWide ? 2 : 1;
   const listPadding = Platform.OS === 'web' ? 20 : 16;
   const pageGutter = isXsMobile ? 10 : isSmallMobile ? 12 : isCompactMobile ? 14 : 16;
   const sectionInlinePadding = isMobile ? 0 : pageGutter;
@@ -149,10 +157,10 @@ export default function HomeScreen() {
     setChatInput('');
 
     setTimeout(() => {
-      const aiMsg = { 
-        id: (Date.now() + 1).toString(), 
-        text: "Thanks for reaching out! An agent will be with you shortly to help with your request.", 
-        sender: 'ai' 
+      const aiMsg = {
+        id: (Date.now() + 1).toString(),
+        text: "Thanks for reaching out! An agent will be with you shortly to help with your request.",
+        sender: 'ai'
       };
       setChatMessages(prev => [...prev, aiMsg]);
     }, 1000);
@@ -178,10 +186,10 @@ export default function HomeScreen() {
   }, [headerHeight]);
 
   const hasActiveFilters = useMemo(() => {
-    return searchQuery !== '' || 
-           selectedCity !== 'All' || 
-           selectedBHK !== 'All' || 
-           selectedType !== 'All' || 
+    return searchQuery !== '' ||
+           selectedCity !== 'All' ||
+           selectedBHK !== 'All' ||
+           selectedType !== 'All' ||
            sortBy !== 'default' ||
            selectedIntent !== 'Buy' ||
            showSavedOnly;
@@ -226,11 +234,11 @@ export default function HomeScreen() {
     return 86 + (Math.abs(hash) % 14);
   }, [searchQuery, selectedCity, selectedBHK, selectedType, selectedIntent]);
 
-  const allProperties = useMemo(() => 
-    Object.keys(PROPERTIES_DATA).map(id => ({ id, ...PROPERTIES_DATA[id] })), 
+  const allProperties = useMemo(() =>
+    Object.keys(PROPERTIES_DATA).map(id => ({ id, ...PROPERTIES_DATA[id] })),
   []);
 
-  const featuredProperties = useMemo(() => 
+  const featuredProperties = useMemo(() =>
     allProperties.filter(p => p.isFeatured),
   [allProperties]);
 
@@ -286,7 +294,7 @@ export default function HomeScreen() {
 
   const filteredProperties = useMemo(() => {
     let result = allProperties.filter(p => {
-      const matchesSearch = p.location.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchesSearch = p.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             p.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCity = selectedCity === 'All' || p.location.toLowerCase().includes(selectedCity.toLowerCase());
 
@@ -376,11 +384,19 @@ export default function HomeScreen() {
     };
   }, [filteredProperties, formatCurrencyShort]);
 
+  const heroStats = useMemo(() => ([
+    { id: 'listings', label: 'Live Listings', value: marketSnapshot.listingCount.toString() },
+    { id: 'ready', label: 'Ready to Move', value: marketSnapshot.readyToMoveCount.toString() },
+    { id: 'saved', label: 'Saved', value: savedPropertyIds.length.toString() },
+  ]), [marketSnapshot.listingCount, marketSnapshot.readyToMoveCount, savedPropertyIds.length]);
+
+  const activeIntentCopy = selectedIntent === 'New Projects' ? 'new project opportunities' : `${selectedIntent.toLowerCase()} opportunities`;
+
   const renderProperty = ({ item }: { item: any }) => {
     return (
-    <Pressable 
+    <Pressable
       style={({ hovered }) => [
-        styles.card, 
+        styles.card,
         isMobile && styles.cardCompact,
         savedPropertyIds.includes(item.id) && styles.cardSaved,
         numColumns === 1 ? styles.cardSingleColumn : { width: numColumns === 2 ? '48.5%' : '31.5%' },
@@ -424,14 +440,14 @@ export default function HomeScreen() {
           <Text style={styles.metaText}>{item.pricePerSqftValue ? `Rs ${item.pricePerSqftValue.toLocaleString('en-IN')}/sqft` : 'Price on request'}</Text>
         </View>
         <View style={[styles.cardActions, isCompactMobile && styles.cardActionsStack]}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.viewDetailsBtn, isMobile && styles.mobileActionButton, isCompactMobile && styles.actionBtnStack]}
             onPress={() => router.push({ pathname: '/property/[id]', params: { id: item.id } } as any)}
           >
             <Text style={styles.viewDetailsText}>View Details</Text>
           </TouchableOpacity>
           {item.rooms && item.rooms.length > 0 && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.virtualTourBtn, isMobile && styles.mobileActionButton, isCompactMobile && styles.actionBtnStack]}
               onPress={() => router.push({ pathname: '/property/[id]', params: { id: item.id, virtualTour: 'true' } } as any)}
             >
@@ -439,7 +455,7 @@ export default function HomeScreen() {
               <Text style={styles.virtualTourBtnText}>360 Tour</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.compareBtn, isMobile && styles.mobileActionButton, isCompactMobile && styles.actionBtnStack]}
             onPress={() => toggleCompareProperty(item.id)}
           >
@@ -461,13 +477,14 @@ export default function HomeScreen() {
       <Stack.Screen options={{ title: 'EstatePerks', headerShown: true }} />
       <FlatList
         ref={flatListRef}
+        style={styles.listViewport}
         key={numColumns} // Force re-render when columns change
         data={filteredProperties}
         renderItem={renderProperty}
         keyExtractor={item => item.id}
         numColumns={numColumns}
         contentContainerStyle={[
-          styles.list, 
+          styles.list,
           isLargeScreen && styles.listLarge,
           !isMobile && { padding: listPadding },
           isMobile && styles.listMobile,
@@ -479,30 +496,31 @@ export default function HomeScreen() {
           <View style={[styles.header, isMobile && styles.headerMobile]} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
             <View style={[styles.headerTop, isMobile && styles.headerStack, isMobile && styles.headerTopMobile, isMobile && { paddingHorizontal: sectionInlinePadding }]}>
               {!isPropertiesView ? (
-                <View style={[styles.heroTextBlock, isLargeScreen && styles.heroTextBlockLarge]}>
-                  <Animated.Text 
+                <>
+                <View style={[styles.heroTextBlock, showHeroInsightsPanel && styles.heroTextBlockDesktop, isLargeScreen && styles.heroTextBlockLarge]}>
+                  <Animated.Text
                     entering={FadeInDown.duration(1000).springify()}
                     style={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall, isXsMobile && styles.welcomeXs]}
                   >
                   {"Find your dream home".split('').map((char, index) => (
-                    <ShimmerChar 
-                      key={index} 
-                      char={char} 
-                      index={index} 
-                      total={20} 
+                    <ShimmerChar
+                      key={index}
+                      char={char}
+                      index={index}
+                      total={20}
                       isAccent={index >= 10}
                       baseStyle={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall, isXsMobile && styles.welcomeXs]}
                     />
                   ))}
                   </Animated.Text>
-                  <Animated.Text 
+                  <Animated.Text
                     entering={FadeInDown.delay(200).duration(1000).springify()}
                     style={[styles.subtitle, isMobile && styles.subtitleMobile, isSmallMobile && styles.subtitleSmall, isXsMobile && styles.subtitleXs]}
                   >
                     Handpicked premium properties for you
                   </Animated.Text>
 
-                  <Animated.View 
+                  <Animated.View
                     entering={FadeInDown.delay(300).duration(800)}
                     style={styles.marketPulse}
                   >
@@ -510,13 +528,13 @@ export default function HomeScreen() {
                     <Text style={styles.pulseText}>Market Pulse: Prices in {selectedCity === 'All' ? 'India' : selectedCity} up 4.2% this month</Text>
                   </Animated.View>
 
-                  <Animated.View 
+                  <Animated.View
                     entering={FadeInDown.delay(400).duration(1000).springify()}
                     style={styles.heroCTAContainer}
                   >
-                    <Text style={styles.heroCTAText}>Buy • Rent • Invest in top cities</Text>
+                    <Text style={styles.heroCTAText}>Buy | Rent | Invest in top cities</Text>
                     <View style={[styles.heroCTAButtons, isMobile && styles.ctaWrap]}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[
                           styles.heroCTAButton,
                           isMobile && styles.heroCTAButtonMobile,
@@ -531,7 +549,7 @@ export default function HomeScreen() {
                       >
                         <Text style={[styles.heroCTAButtonText, isMobile && styles.heroCTAButtonTextMobile, selectedIntent === 'Buy' && styles.heroCTAButtonTextActive]}>Buy</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[
                           styles.heroCTAButton,
                           isMobile && styles.heroCTAButtonMobile,
@@ -546,7 +564,7 @@ export default function HomeScreen() {
                       >
                         <Text style={[styles.heroCTAButtonText, isMobile && styles.heroCTAButtonTextMobile, selectedIntent === 'Rent' && styles.heroCTAButtonTextActive]}>Rent</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[
                           styles.heroCTAButton,
                           isMobile && styles.heroCTAButtonMobile,
@@ -564,6 +582,28 @@ export default function HomeScreen() {
                     </View>
                   </Animated.View>
                 </View>
+                {showHeroInsightsPanel && (
+                  <View style={styles.heroInsightsPanel}>
+                    <Text style={styles.heroInsightsTitle}>Why EstatePerks</Text>
+                    {PLATFORM_HIGHLIGHTS.map((item) => (
+                      <View key={item.id} style={styles.heroInsightsRow}>
+                        <View style={styles.heroInsightsIconWrap}>
+                          <Ionicons name={item.icon as any} size={16} color="#22d3ee" />
+                        </View>
+                        <Text style={styles.heroInsightsText}>{item.label}</Text>
+                      </View>
+                    ))}
+                    <View style={styles.heroStatsGrid}>
+                      {heroStats.map((stat) => (
+                        <View key={stat.id} style={styles.heroStatCard}>
+                          <Text style={styles.heroStatValue}>{stat.value}</Text>
+                          <Text style={styles.heroStatLabel}>{stat.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+                </>
               ) : (
                 <View style={styles.heroTextBlock}>
                   <Text style={styles.welcome}>All Properties</Text>
@@ -595,14 +635,14 @@ export default function HomeScreen() {
 
             <View style={[styles.trendingSection, isMobile && { marginTop: sectionSpacing + 8 }]}>
               <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Trending Localities</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
                 contentContainerStyle={[styles.trendingScroll, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
                 {TRENDING_LOCALITIES.map((item) => (
-                  <TouchableOpacity 
-                    key={item.id} 
+                  <TouchableOpacity
+                    key={item.id}
                     style={[styles.localityItem, isMobile && { marginRight: 14, width: 72 }]}
                     onPress={() => setSearchQuery(item.name)}
                   >
@@ -616,18 +656,18 @@ export default function HomeScreen() {
             </View>
 
             {!isPropertiesView && featuredProperties.length > 0 && !hasActiveFilters && (
-              <View style={styles.featuredSection}>
+              <View style={[styles.featuredSection, isMobile && styles.featuredSectionMobile]}>
                 <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Featured Properties</Text>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false} 
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
                   contentContainerStyle={[styles.featuredContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
                 >
                   {featuredProperties.map(item => (
-                    <Pressable 
-                      key={item.id} 
+                    <Pressable
+                      key={item.id}
                       style={({ hovered }) => [
-                        styles.featuredCard, 
+                        styles.featuredCard,
                         { width: isLargeScreen ? 350 : isTablet ? 300 : mobileCarouselCardWidth },
                         hovered && Platform.OS === 'web' && styles.featuredCardHover
                       ]}
@@ -635,7 +675,7 @@ export default function HomeScreen() {
                     >
                       <Image source={{ uri: item.image }} style={styles.featuredImage} contentFit="cover" />
                       <LinearGradient
-                        colors={['transparent', 'rgba(2, 6, 23, 0.9)']}
+                        colors={['transparent', 'rgba(5, 12, 24, 0.92)']}
                         style={styles.featuredOverlay}
                       >
                         <View style={styles.featuredBadge}>
@@ -651,124 +691,138 @@ export default function HomeScreen() {
               </View>
             )}
 
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              style={styles.cityFilterContainer}
-              contentContainerStyle={[styles.cityFilterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
-            >
-              {cities.map(city => (
-                <Pressable 
-                  key={city} 
-                  style={({ hovered }) => [
-                    styles.cityChip, 
-                    selectedCity === city && styles.cityChipActive,
-                    hovered && Platform.OS === 'web' && selectedCity !== city && styles.chipHover
-                  ]}
-                  onPress={() => setSelectedCity(city)}
-                >
-                  <Text style={[styles.cityChipText, selectedCity === city && styles.cityChipTextActive]}>{city}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Filter by BHK:</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
-              >
-                {['All', '1 BHK', '2 BHK', '3 BHK', '4+ BHK'].map(bhk => (
-                  <Pressable 
-                    key={bhk} 
-                    style={({ hovered }) => [
-                      styles.filterChip, 
-                      isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
-                      selectedBHK === bhk && styles.filterChipActive,
-                      hovered && Platform.OS === 'web' && selectedBHK !== bhk && styles.chipHover
-                    ]}
-                    onPress={() => setSelectedBHK(bhk)}
-                  >
-                    <Text style={[styles.filterChipText, selectedBHK === bhk && styles.filterChipTextActive]}>{bhk}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Property Type:</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
-              >
-                {['All', 'Apartment', 'Villa'].map(type => (
-                  <Pressable 
-                    key={type} 
-                    style={({ hovered }) => [
-                      styles.filterChip, 
-                      isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
-                      selectedType === type && styles.filterChipActive,
-                      hovered && Platform.OS === 'web' && selectedType !== type && styles.chipHover
-                    ]}
-                    onPress={() => setSelectedType(type)}
-                  >
-                    <Text style={[styles.filterChipText, selectedType === type && styles.filterChipTextActive]}>{type}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.sortSection}>
-              <Text style={[styles.sortLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Sort by Price:</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.sortContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
-              >
-                {[
-                  { label: 'Default', value: 'default' },
-                  { label: 'Low to High', value: 'low-to-high' },
-                  { label: 'High to Low', value: 'high-to-low' },
-                ].map(option => (
-                  <Pressable 
-                    key={option.value} 
-                    style={({ hovered }) => [
-                      styles.sortChip, 
-                      isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
-                      sortBy === option.value && styles.sortChipActive,
-                      hovered && Platform.OS === 'web' && sortBy !== option.value && styles.chipHover
-                    ]}
-                    onPress={() => setSortBy(option.value)}
-                  >
-                    <Text style={[styles.sortChipText, sortBy === option.value && styles.sortChipTextActive]}>{option.label}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Saved Properties:</Text>
+            <View style={[styles.discoveryPanel, isMobile && { marginHorizontal: sectionInlinePadding }]}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
+                style={styles.cityFilterContainer}
+                contentContainerStyle={[styles.cityFilterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
-                <Pressable
-                  style={({ hovered }) => [
-                    styles.filterChip,
-                    isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
-                    showSavedOnly && styles.filterChipActive,
-                    hovered && Platform.OS === 'web' && !showSavedOnly && styles.chipHover
-                  ]}
-                  onPress={() => setShowSavedOnly(prev => !prev)}
-                >
-                  <Text style={[styles.filterChipText, showSavedOnly && styles.filterChipTextActive]}>
-                    Saved Only ({savedPropertyIds.length})
-                  </Text>
-                </Pressable>
+                {cities.map(city => (
+                  <Pressable
+                    key={city}
+                    style={({ hovered }) => [
+                      styles.cityChip,
+                      selectedCity === city && styles.cityChipActive,
+                      hovered && Platform.OS === 'web' && selectedCity !== city && styles.chipHover
+                    ]}
+                    onPress={() => setSelectedCity(city)}
+                  >
+                    <Text style={[styles.cityChipText, selectedCity === city && styles.cityChipTextActive]}>{city}</Text>
+                  </Pressable>
+                ))}
               </ScrollView>
+
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Filter by BHK:</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
+                >
+                  {['All', '1 BHK', '2 BHK', '3 BHK', '4+ BHK'].map(bhk => (
+                    <Pressable
+                      key={bhk}
+                      style={({ hovered }) => [
+                        styles.filterChip,
+                        isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
+                        selectedBHK === bhk && styles.filterChipActive,
+                        hovered && Platform.OS === 'web' && selectedBHK !== bhk && styles.chipHover
+                      ]}
+                      onPress={() => setSelectedBHK(bhk)}
+                    >
+                      <Text style={[styles.filterChipText, selectedBHK === bhk && styles.filterChipTextActive]}>{bhk}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Property Type:</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
+                >
+                  {['All', 'Apartment', 'Villa'].map(type => (
+                    <Pressable
+                      key={type}
+                      style={({ hovered }) => [
+                        styles.filterChip,
+                        isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
+                        selectedType === type && styles.filterChipActive,
+                        hovered && Platform.OS === 'web' && selectedType !== type && styles.chipHover
+                      ]}
+                      onPress={() => setSelectedType(type)}
+                    >
+                      <Text style={[styles.filterChipText, selectedType === type && styles.filterChipTextActive]}>{type}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.sortSection}>
+                <Text style={[styles.sortLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Sort by Price:</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[styles.sortContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
+                >
+                  {[
+                    { label: 'Default', value: 'default' },
+                    { label: 'Low to High', value: 'low-to-high' },
+                    { label: 'High to Low', value: 'high-to-low' },
+                  ].map(option => (
+                    <Pressable
+                      key={option.value}
+                      style={({ hovered }) => [
+                        styles.sortChip,
+                        isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
+                        sortBy === option.value && styles.sortChipActive,
+                        hovered && Platform.OS === 'web' && sortBy !== option.value && styles.chipHover
+                      ]}
+                      onPress={() => setSortBy(option.value)}
+                    >
+                      <Text style={[styles.sortChipText, sortBy === option.value && styles.sortChipTextActive]}>{option.label}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Saved Properties:</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
+                >
+                  <Pressable
+                    style={({ hovered }) => [
+                      styles.filterChip,
+                      isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
+                      showSavedOnly && styles.filterChipActive,
+                      hovered && Platform.OS === 'web' && !showSavedOnly && styles.chipHover
+                    ]}
+                    onPress={() => setShowSavedOnly(prev => !prev)}
+                  >
+                    <Text style={[styles.filterChipText, showSavedOnly && styles.filterChipTextActive]}>
+                      Saved Only ({savedPropertyIds.length})
+                    </Text>
+                  </Pressable>
+                </ScrollView>
+              </View>
+
+              <View style={[styles.resultsStrip, isCompactMobile && styles.resultsStripCompact]}>
+                <View style={styles.resultsStripTextWrap}>
+                  <Text style={styles.resultsStripTitle}>{filteredProperties.length} homes matched</Text>
+                  <Text style={styles.resultsStripSubtitle}>
+                    Curated {activeIntentCopy} in {selectedCity === 'All' ? 'top cities across India' : selectedCity}
+                  </Text>
+                </View>
+                <TouchableOpacity style={[styles.resultsStripBtn, isCompactMobile && styles.resultsStripBtnCompact]} onPress={scrollToProperties}>
+                  <Text style={styles.resultsStripBtnText}>View Listings</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={[styles.insightsSection, isMobile && { marginHorizontal: sectionInlinePadding }]}>
@@ -793,16 +847,16 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.testimonialsSection}>
+            <View style={[styles.testimonialsSection, isMobile && styles.testimonialsSectionMobile]}>
               <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: sectionInlinePadding }]}>What Our Clients Say</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
                 contentContainerStyle={[styles.testimonialsContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
                 {TESTIMONIALS.map(item => (
-                  <Pressable 
-                    key={item.id} 
+                  <Pressable
+                    key={item.id}
                     style={({ hovered }) => [
                       styles.testimonialCard,
                       { width: isLargeScreen ? 350 : isTablet ? 300 : mobileCarouselCardWidth },
@@ -820,11 +874,11 @@ export default function HomeScreen() {
                     </View>
                     <View style={styles.ratingRow}>
                       {[...Array(5)].map((_, i) => (
-                        <Ionicons 
-                          key={i} 
-                          name={i < item.rating ? "star" : "star-outline"} 
-                          size={14} 
-                          color="#fbbf24" 
+                        <Ionicons
+                          key={i}
+                          name={i < item.rating ? "star" : "star-outline"}
+                          size={14}
+                          color="#fbbf24"
                         />
                       ))}
                     </View>
@@ -837,9 +891,9 @@ export default function HomeScreen() {
         }
         ListFooterComponent={
           <LinearGradient
-            colors={['#020617', '#0f172a', '#020617']}
+            colors={['#020617', '#0c172a', '#111c30']}
             style={[
-              styles.footerContainer, 
+              styles.footerContainer,
               isMobile && styles.footerContainerMobile,
               isMobile && { paddingHorizontal: sectionInlinePadding, paddingBottom: 48 }
             ]}
@@ -858,7 +912,7 @@ export default function HomeScreen() {
                   <View style={styles.trustItem}><Text style={styles.trustValue}>15+</Text><Text style={styles.trustLabel}>Cities</Text></View>
                 </View>
               </View>
-              
+
               <View style={[styles.newsletterCard, isMobile && styles.newsletterMobile]}>
                 <Text style={styles.newsletterTitle}>Stay Updated</Text>
                 <Text style={styles.newsletterSubtext}>Subscribe to get the latest property alerts.</Text>
@@ -869,9 +923,9 @@ export default function HomeScreen() {
                   </Animated.View>
                 ) : (
                   <View style={[styles.newsletterInputRow, isCompactMobile && styles.newsletterInputRowCompact]}>
-                    <TextInput 
-                      style={styles.newsletterInput} 
-                      placeholder="Email Address" 
+                    <TextInput
+                      style={styles.newsletterInput}
+                      placeholder="Email Address"
                       placeholderTextColor="#64748b"
                       value={newsletterEmail}
                       onChangeText={setNewsletterEmail}
@@ -970,7 +1024,7 @@ export default function HomeScreen() {
 
               <View style={[styles.footerColumn, isMobile ? styles.footerColumnMobile : { width: isLargeScreen ? '23%' : '48%' }]}>
                 <Text style={styles.footerSectionTitle}>Download App</Text>
-                <Pressable 
+                <Pressable
                   style={({ hovered }) => [styles.downloadBadge, hovered && Platform.OS === 'web' && styles.downloadBadgeHover]}
                 >
                   {({ hovered }) => (
@@ -983,7 +1037,7 @@ export default function HomeScreen() {
                     </>
                   )}
                 </Pressable>
-                <Pressable 
+                <Pressable
                   style={({ hovered }) => [styles.downloadBadge, { marginTop: 10 }, hovered && Platform.OS === 'web' && styles.downloadBadgeHover]}
                 >
                   {({ hovered }) => (
@@ -1001,7 +1055,7 @@ export default function HomeScreen() {
 
             <View style={[styles.socialRow, isCompactMobile && styles.socialRowCompact]}>
               {['logo-facebook', 'logo-twitter', 'logo-instagram', 'logo-linkedin'].map((icon) => (
-                <Pressable 
+                <Pressable
                   key={icon}
                   style={({ hovered }) => [
                     styles.socialIcon,
@@ -1009,10 +1063,10 @@ export default function HomeScreen() {
                   ]}
                 >
                   {({ hovered }) => (
-                    <Ionicons 
-                      name={icon as any} 
-                      size={20} 
-                      color={hovered && Platform.OS === 'web' ? "#fbbf24" : "#fff"} 
+                    <Ionicons
+                      name={icon as any}
+                      size={20}
+                      color={hovered && Platform.OS === 'web' ? "#fbbf24" : "#fff"}
                     />
                   )}
                 </Pressable>
@@ -1032,7 +1086,7 @@ export default function HomeScreen() {
       />
 
       {/* Floating Live Chat Button */}
-      <Pressable 
+      <Pressable
         style={({ hovered }) => [
           styles.floatingChatBtn,
           isCompactMobile && styles.floatingChatBtnCompact,
@@ -1107,7 +1161,7 @@ export default function HomeScreen() {
 
       {/* Support Chat Modal */}
       <Modal visible={isChatVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
@@ -1134,8 +1188,8 @@ export default function HomeScreen() {
             <View style={styles.quickReplyContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {QUICK_REPLIES.map((reply, index) => (
-                  <Pressable 
-                    key={index} 
+                  <Pressable
+                    key={index}
                     style={({ hovered }) => [
                       styles.quickReplyChip,
                       hovered && Platform.OS === 'web' && styles.chipHover
@@ -1213,9 +1267,9 @@ export default function HomeScreen() {
               <Text style={styles.aboutText}>
                 Join our mission to revolutionize the real estate industry. We&apos;re looking for passionate individuals to join our growing team.
               </Text>
-              
+
               <Text style={[styles.inputLabel, { marginTop: 20, color: '#22d3ee' }]}>Current Openings</Text>
-              
+
               {[
                 { title: 'Senior Real Estate Consultant', location: 'Mumbai / Remote', type: 'Full-time' },
                 { title: 'Full Stack Developer (React Native)', location: 'Bangalore / Remote', type: 'Full-time' },
@@ -1256,7 +1310,7 @@ export default function HomeScreen() {
               <Text style={styles.aboutText}>
                 At EstatePerks, we take your privacy seriously. This policy outlines how we handle your data.
               </Text>
-              
+
               <Text style={[styles.inputLabel, { marginTop: 20, color: '#22d3ee' }]}>1. Data Collection</Text>
               <Text style={styles.aboutText}>
                 We collect information you provide directly to us, such as when you create an account, search for properties, or contact support.
@@ -1296,7 +1350,7 @@ export default function HomeScreen() {
               <Text style={styles.aboutText}>
                 Welcome to EstatePerks. By using our services, you agree to the following terms.
               </Text>
-              
+
               <Text style={[styles.inputLabel, { marginTop: 20, color: '#22d3ee' }]}>1. Acceptance of Terms</Text>
               <Text style={styles.aboutText}>
                 By accessing or using EstatePerks, you agree to be bound by these Terms of Service and all applicable laws and regulations.
@@ -1328,14 +1382,17 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: '#020617',
-    alignItems: 'center',
+    alignItems: 'stretch',
     width: '100%',
     minWidth: 0,
   },
-  list: { 
+  listViewport: {
+    width: '100%',
+  },
+  list: {
     width: '100%',
     minWidth: 0,
   },
@@ -1344,40 +1401,111 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   listLarge: {
-    maxWidth: 1280,
+    maxWidth: 1360,
     alignSelf: 'center',
   },
   columnWrapper: {
     justifyContent: 'space-between',
     gap: 24,
   },
-  header: { marginBottom: 24, width: '100%', minWidth: 0 },
-  headerMobile: { marginBottom: 16 },
+  header: { marginBottom: 30, width: '100%', minWidth: 0 },
+  headerMobile: { marginBottom: 18 },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     width: '100%',
     minWidth: 0,
+    backgroundColor: '#0b1423',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#1f2d45',
+    padding: 22,
+    gap: 18,
   },
   headerTopMobile: {
-    gap: 12,
+    gap: 14,
+    borderRadius: 18,
+    padding: 14,
   },
   heroTextBlock: {
     width: '100%',
     minWidth: 0,
   },
+  heroTextBlockDesktop: {
+    width: '66%',
+  },
   heroTextBlockLarge: {
     flex: 1,
     width: 'auto',
   },
-  clearButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  heroInsightsPanel: {
+    width: 320,
+    backgroundColor: '#09101d',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: '#1f2d45',
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+  },
+  heroInsightsTitle: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  heroInsightsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroInsightsIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroInsightsText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
+  },
+  heroStatsGrid: {
+    marginTop: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  heroStatCard: {
+    width: '31.5%',
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#23314a',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  heroStatValue: {
+    color: '#22d3ee',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  heroStatLabel: {
+    color: '#94a3b8',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  clearButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
   },
   clearButtonText: {
     color: '#ef4444',
@@ -1389,34 +1517,34 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   welcome: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '900',
     color: '#fff',
-    letterSpacing: -1,
+    letterSpacing: -1.2,
     flexShrink: 1,
     minWidth: 0,
   },
-  welcomeMobile: { fontSize: 26, lineHeight: 32 },
-  highlight: { 
+  welcomeMobile: { fontSize: 28, lineHeight: 34 },
+  highlight: {
     color: '#fbbf24',
     textShadowColor: 'rgba(251, 191, 36, 0.5)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 15,
   },
-  subtitle: { color: '#94a3b8', fontSize: 16, marginTop: 4, flexShrink: 1, minWidth: 0 },
+  subtitle: { color: '#a9b8cb', fontSize: 17, marginTop: 6, flexShrink: 1, minWidth: 0, lineHeight: 25 },
   subtitleMobile: { fontSize: 14 },
   marketPulse: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(34, 211, 238, 0.05)',
+    backgroundColor: 'rgba(34, 211, 238, 0.08)',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 16,
+    paddingVertical: 8,
+    borderRadius: 24,
+    marginTop: 18,
     alignSelf: 'flex-start',
     maxWidth: '100%',
     borderWidth: 1,
-    borderColor: 'rgba(34, 211, 238, 0.1)',
+    borderColor: 'rgba(34, 211, 238, 0.2)',
   },
   pulseDot: {
     width: 6,
@@ -1434,8 +1562,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   heroCTAContainer: {
-    marginTop: 24,
-    gap: 16,
+    marginTop: 22,
+    gap: 14,
     width: '100%',
   },
   heroCTAText: {
@@ -1454,12 +1582,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   heroCTAButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
     borderRadius: 12,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
     minWidth: 0,
   },
   heroCTAButtonMobile: {
@@ -1479,7 +1607,7 @@ const styles = StyleSheet.create({
     borderColor: '#22d3ee',
   },
   heroCTAButtonText: {
-    color: '#94a3b8',
+    color: '#c0ccdd',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -1489,17 +1617,17 @@ const styles = StyleSheet.create({
   heroCTAButtonTextActive: {
     color: '#020617',
   },
-  card: { 
-    backgroundColor: '#0f172a', 
-    borderRadius: 20, 
-    marginBottom: 24, 
+  card: {
+    backgroundColor: '#0f172a',
+    borderRadius: 22,
+    marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#25344f',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    elevation: 8,
     overflow: 'hidden',
     minWidth: 0,
     width: '100%',
@@ -1543,14 +1671,14 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: 200 },
   info: { padding: 16, minWidth: 0 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minWidth: 0 },
-  name: { fontSize: 18, fontWeight: '800', color: '#fff', flex: 1, marginRight: 8, minWidth: 0 },
+  name: { fontSize: 19, fontWeight: '800', color: '#fff', flex: 1, marginRight: 8, minWidth: 0 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, minWidth: 0 },
   ratingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(251, 191, 36, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   ratingText: { color: '#fbbf24', fontWeight: 'bold', fontSize: 12 },
-  location: { color: '#94a3b8', fontSize: 13, flex: 1, minWidth: 0 },
+  location: { color: '#b4c0d2', fontSize: 13, flex: 1, minWidth: 0 },
   footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, minWidth: 0 },
   price: { fontSize: 18, fontWeight: 'bold', color: '#22d3ee', flexShrink: 1 },
-  sqft: { color: '#64748b', fontSize: 14 },
+  sqft: { color: '#8ea0b8', fontSize: 14 },
   metaRow: {
     marginTop: 8,
     flexDirection: 'row',
@@ -1558,19 +1686,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metaText: {
-    color: '#94a3b8',
+    color: '#b4c0d2',
     fontSize: 11,
     flex: 1,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    marginTop: 24,
+    backgroundColor: '#0b1423',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    marginTop: 20,
+    paddingVertical: 2,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#1f2d45',
     minWidth: 0,
     ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(10px)' } as any) : {}),
   },
@@ -1580,26 +1709,31 @@ const styles = StyleSheet.create({
   searchIcon: { marginRight: 8 },
   searchInput: {
     flex: 1,
-    height: 48,
+    height: 52,
     color: '#fff',
     fontSize: 15,
     ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
   },
   aiSearchBtn: {
     backgroundColor: '#22d3ee',
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
   },
   trendingSection: {
-    marginTop: 32,
+    marginTop: 24,
+    backgroundColor: '#0b1423',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1f2d45',
+    paddingVertical: 16,
   },
   trendingScroll: {
     paddingRight: 20,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   localityItem: {
     alignItems: 'center',
@@ -1610,15 +1744,15 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
     marginBottom: 8,
   },
   localityName: {
-    color: '#94a3b8',
+    color: '#c0ccdd',
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
@@ -1710,31 +1844,40 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   cityFilterContainer: {
-    marginTop: 20,
+    marginTop: 4,
   },
   cityFilterContent: {
-    paddingRight: 20,
+    paddingRight: 12,
+  },
+  discoveryPanel: {
+    marginTop: 24,
+    backgroundColor: '#0b1423',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1f2d45',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   cityChip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
     ...(Platform.OS === 'web' ? { transitionProperty: 'all', transitionDuration: '0.2s' } : {}),
   },
   chipHover: {
-    backgroundColor: '#1e293b',
-    borderColor: '#334155',
+    backgroundColor: '#17243b',
+    borderColor: '#3a4f72',
   },
   cityChipActive: {
     backgroundColor: '#22d3ee',
     borderColor: '#22d3ee',
   },
   cityChipText: {
-    color: '#94a3b8',
+    color: '#c0ccdd',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -1742,35 +1885,35 @@ const styles = StyleSheet.create({
     color: '#020617',
   },
   filterSection: {
-    marginTop: 20,
+    marginTop: 16,
   },
   filterLabel: {
     color: '#64748b',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 10,
     marginLeft: 4,
     minWidth: 0,
   },
   filterContent: {
-    paddingRight: 20,
+    paddingRight: 12,
   },
   filterChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
   },
   filterChipActive: {
     borderColor: '#22d3ee',
     backgroundColor: 'rgba(34, 211, 238, 0.1)',
   },
   filterChipText: {
-    color: '#94a3b8',
+    color: '#c0ccdd',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1778,48 +1921,93 @@ const styles = StyleSheet.create({
     color: '#22d3ee',
   },
   sortSection: {
-    marginTop: 20,
+    marginTop: 16,
   },
   sortLabel: {
     color: '#64748b',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 10,
     marginLeft: 4,
     minWidth: 0,
   },
   sortContent: {
-    paddingRight: 20,
+    paddingRight: 12,
   },
   sortChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
   },
   sortChipActive: {
     borderColor: '#22d3ee',
     backgroundColor: 'rgba(34, 211, 238, 0.1)',
   },
   sortChipText: {
-    color: '#94a3b8',
+    color: '#c0ccdd',
     fontSize: 12,
     fontWeight: '600',
   },
   sortChipTextActive: {
     color: '#22d3ee',
   },
+  resultsStrip: {
+    marginTop: 18,
+    backgroundColor: '#101b2f',
+    borderWidth: 1,
+    borderColor: '#2b3d5c',
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  resultsStripCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  resultsStripTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  resultsStripTitle: {
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  resultsStripSubtitle: {
+    marginTop: 3,
+    color: '#b4c0d2',
+    fontSize: 12,
+  },
+  resultsStripBtn: {
+    backgroundColor: '#22d3ee',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  resultsStripBtnCompact: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  resultsStripBtnText: {
+    color: '#04121f',
+    fontWeight: '800',
+    fontSize: 12,
+  },
   insightsSection: {
     marginTop: 24,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0b1423',
     borderWidth: 1,
-    borderColor: '#1e293b',
-    borderRadius: 16,
-    padding: 14,
+    borderColor: '#1f2d45',
+    borderRadius: 20,
+    padding: 16,
   },
   insightsTitle: {
     color: '#fff',
@@ -1836,9 +2024,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   insightCard: {
-    backgroundColor: '#020617',
+    backgroundColor: '#111c30',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -1856,6 +2044,16 @@ const styles = StyleSheet.create({
   },
   featuredSection: {
     marginTop: 24,
+    backgroundColor: '#0b1423',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1f2d45',
+    paddingVertical: 16,
+  },
+  featuredSectionMobile: {
+    marginTop: 18,
+    borderRadius: 16,
+    paddingVertical: 12,
   },
   featuredTitle: {
     fontSize: 18,
@@ -1873,7 +2071,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 16,
     overflow: 'hidden',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     ...(Platform.OS === 'web' ? { transitionProperty: 'all', transitionDuration: '0.3s' } : {}),
   },
   featuredCardHover: {
@@ -1929,7 +2127,7 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
     paddingHorizontal: 20,
     borderTopWidth: 1,
-    borderTopColor: '#22d3ee',
+    borderTopColor: '#2b3d5c',
     width: '100%',
     minWidth: 0,
   },
@@ -1993,11 +2191,11 @@ const styles = StyleSheet.create({
   newsletterCard: {
     width: '100%',
     maxWidth: 450,
-    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    backgroundColor: 'rgba(17, 28, 48, 0.55)',
     padding: 24,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(34, 211, 238, 0.2)',
+    borderColor: 'rgba(34, 211, 238, 0.28)',
     shadowColor: '#22d3ee',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
@@ -2070,15 +2268,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   cityLinkChip: {
-    color: '#94a3b8',
+    color: '#b4c0d2',
     fontSize: 12,
     fontWeight: '600',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    backgroundColor: 'rgba(30, 41, 59, 0.3)',
+    borderColor: '#2b3d5c',
+    backgroundColor: 'rgba(17, 28, 48, 0.6)',
     ...(Platform.OS === 'web' ? { transitionProperty: 'all', transitionDuration: '0.2s' } : {}),
   },
   footerGrid: {
@@ -2101,7 +2299,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   footerLink: {
-    color: '#94a3b8',
+    color: '#b4c0d2',
     fontSize: 14,
     marginBottom: 12,
   },
@@ -2115,7 +2313,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   contactText: {
-    color: '#94a3b8',
+    color: '#b4c0d2',
     fontSize: 13,
   },
   socialRow: {
@@ -2133,7 +2331,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -2187,20 +2385,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   testimonialsSection: {
-    marginTop: 32,
+    marginTop: 26,
     marginBottom: 8,
+    backgroundColor: '#0b1423',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1f2d45',
+    paddingVertical: 16,
+  },
+  testimonialsSectionMobile: {
+    marginTop: 18,
+    borderRadius: 16,
+    paddingVertical: 12,
   },
   testimonialsContent: {
     paddingRight: 20,
     paddingBottom: 10,
   },
   testimonialCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#101b2f',
     borderRadius: 20,
     padding: 20,
     marginRight: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
     ...(Platform.OS === 'web' ? { transitionProperty: 'all', transitionDuration: '0.3s' } : {}),
   },
   testimonialCardHover: {
@@ -2234,7 +2442,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   testimonialLocation: {
-    color: '#64748b',
+    color: '#8ea0b8',
     fontSize: 12,
   },
   ratingRow: {
@@ -2243,7 +2451,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   testimonialComment: {
-    color: '#94a3b8',
+    color: '#b4c0d2',
     fontSize: 14,
     lineHeight: 20,
     fontStyle: 'italic',
@@ -2330,12 +2538,12 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalContent: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#111c30',
     borderRadius: 24,
     padding: 24,
     width: '100%',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
     minWidth: 0,
   },
   modalContentCompact: {
@@ -2397,25 +2605,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chatInputContainer: { flexDirection: 'row', gap: 10, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#1e293b', minWidth: 0, alignItems: 'center' },
-  chatInput: { 
-    flex: 1, 
-    backgroundColor: '#020617', 
-    borderRadius: 12, 
-    paddingHorizontal: 15, 
-    paddingVertical: 10, 
-    color: '#fff', 
-    fontSize: 14, 
-    borderWidth: 1, 
+  chatInput: {
+    flex: 1,
+    backgroundColor: '#020617',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    color: '#fff',
+    fontSize: 14,
+    borderWidth: 1,
     borderColor: '#334155',
     minWidth: 0,
   },
-  chatSendBtn: { 
-    backgroundColor: '#22d3ee', 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  chatSendBtn: {
+    backgroundColor: '#22d3ee',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center'
   },
   aboutText: {
     color: '#cbd5e1',
@@ -2425,7 +2633,7 @@ const styles = StyleSheet.create({
   compareCard: {
     backgroundColor: '#020617',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#2b3d5c',
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
@@ -2545,4 +2753,3 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
-

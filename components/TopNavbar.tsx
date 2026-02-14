@@ -62,7 +62,7 @@ const ShimmerChar = ({ char, index, total, isAccent, isMobile }: { char: string,
 export default function TopNavbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { logout } = useAuth(); // ✅ NOW SAFE
+  const { logout } = useAuth();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 380;
@@ -187,17 +187,18 @@ function Nav({ label, path, active, icon, isMobile, isCompact }: NavProps) {
 
 const styles = StyleSheet.create({
   container: {
-    height: 72,
-    backgroundColor: '#0f172a',
+    height: 74,
+    backgroundColor: '#081321',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-    paddingHorizontal: 28,
+    borderBottomColor: '#1f2d45',
+    paddingHorizontal: 24,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    ...(Platform.OS === 'web' ? { boxShadow: '0 10px 30px rgba(2, 6, 23, 0.35)' } : {}),
   },
   mobileContainer: {
-    height: 64,
+    height: 66,
     paddingHorizontal: 16,
   },
   compactContainer: {
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
   links: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   mobileLinks: {
     gap: 8,
@@ -244,12 +245,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   navItem: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   activeItem: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#12233a',
+    borderColor: '#2b3d5c',
   },
   mobileNavItem: {
     paddingHorizontal: 10,
@@ -260,7 +264,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   link: {
-    color: '#cbd5f5',
+    color: '#b9c8da',
     fontWeight: '600',
     transitionProperty: 'color',
     transitionDuration: '0.2s',
@@ -272,10 +276,12 @@ const styles = StyleSheet.create({
     color: '#22d3ee',
   },
   logoutBtn: {
-    backgroundColor: '#7f1d1d',
+    backgroundColor: '#3a1015',
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
   },
   mobileLogoutBtn: {
     paddingHorizontal: 10,
@@ -290,6 +296,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   navHover: {
-    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    backgroundColor: 'rgba(34, 211, 238, 0.09)',
+    borderColor: 'rgba(34, 211, 238, 0.2)',
   },
 });
