@@ -6,7 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useRootNavigationState } from 'expo-router';
 
 export default function ScheduleScreen() {
-  const { addVisit } = useVisit();
+  const visitContext = useVisit();
+  const addVisit = visitContext && 'addVisit' in visitContext ? (visitContext as any).addVisit : undefined;
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const params = useLocalSearchParams<{ propertyName: string }>();
@@ -17,11 +18,13 @@ export default function ScheduleScreen() {
     // Generate a more robust unique ID
     const visitId = `vst_${Math.random().toString(36).slice(2, 11)}_${Date.now().toString(36)}`;
     
-    addVisit({
-      id: visitId,
-      name: propertyName || 'Property Tour',
-      date: new Date().toISOString(),
-    });
+    if (addVisit) {
+      addVisit({
+        id: visitId,
+        name: propertyName || 'Property Tour',
+        date: new Date().toISOString(),
+      });
+    }
 
     // Ensure navigation is ready before replacing the route
     if (!navigationState?.key) return;

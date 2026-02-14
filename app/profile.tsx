@@ -66,7 +66,7 @@ export default function ProfileScreen() {
         {role === 'agent' && (
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => router.push('/agent/dashboard')}
+            onPress={() => router.push('/dashboard')}
           >
             <Text style={styles.actionText}>🏢 Agent Dashboard</Text>
           </TouchableOpacity>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Platform, ScrollView, useWindowDimensions, KeyboardAvoidingView, Pressable, Modal, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -47,6 +48,9 @@ const TRENDING_LOCALITIES = [
   { id: '6', name: 'Powai', icon: 'water' },
 ];
 
+const SAVED_PROPERTIES_STORAGE_KEY = 'estateperks:savedProperties:v1';
+const MAX_COMPARE_PROPERTIES = 3;
+
 const ShimmerChar = ({ char, index, total, isAccent, baseStyle }: { char: string, index: number, total: number, isAccent: boolean, baseStyle: any }) => {
   const shimmerValue = useSharedValue(0);
 
@@ -56,7 +60,7 @@ const ShimmerChar = ({ char, index, total, isAccent, baseStyle }: { char: string
       -1,
       false
     );
-  }, []);
+  }, [shimmerValue]);
 
   const animatedStyle = useAnimatedStyle(() => {
     const baseColor = isAccent ? '#fbbf24' : '#ffffff';
@@ -85,10 +89,17 @@ export default function HomeScreen() {
   const isMobile = width < 768;
   const isSmallMobile = width < 380;
   const isCompactMobile = width < 480;
+  const isXsMobile = width < 360;
   const numColumns = isLargeScreen ? 3 : isTablet ? 2 : 1;
   const listPadding = Platform.OS === 'web' ? 20 : 16;
-  const mobileGutter = isSmallMobile ? 12 : 16;
-  const mobileCarouselCardWidth = Math.min(340, width - mobileGutter * 2 - 8);
+  const pageGutter = isXsMobile ? 10 : isSmallMobile ? 12 : isCompactMobile ? 14 : 16;
+  const sectionInlinePadding = isMobile ? 0 : pageGutter;
+  const sectionSpacing = isSmallMobile ? 16 : 20;
+  const chipSpacing = isSmallMobile ? 6 : 8;
+  const mobileCarouselCardWidth = Math.min(340, width - pageGutter * 2);
+  const modalMaxWidth = Math.min(500, Math.max(280, width - pageGutter * 2));
+  const modalMaxHeight = isXsMobile ? '94%' : isSmallMobile ? '92%' : '88%';
+  const chatModalHeight = isXsMobile ? '92%' : isMobile ? '88%' : '70%';
 
   const flatListRef = useRef<FlatList>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -102,6 +113,10 @@ export default function HomeScreen() {
   const [selectedBHK, setSelectedBHK] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
   const [selectedIntent, setSelectedIntent] = useState('Buy');
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>([]);
+  const [comparePropertyIds, setComparePropertyIds] = useState<string[]>([]);
+  const [isCompareModalVisible, setIsCompareModalVisible] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
   const [isAboutModalVisible, setIsAboutModalVisible] = useState(false);
   const [isCareersModalVisible, setIsCareersModalVisible] = useState(false);
@@ -150,6 +165,7 @@ export default function HomeScreen() {
     setSelectedBHK('All');
     setSelectedType('All');
     setSelectedIntent('Buy');
+    setShowSavedOnly(false);
   };
 
   const scrollToProperties = useCallback(() => {
@@ -167,8 +183,9 @@ export default function HomeScreen() {
            selectedBHK !== 'All' || 
            selectedType !== 'All' || 
            sortBy !== 'default' ||
-           selectedIntent !== 'Buy';
-  }, [searchQuery, selectedCity, selectedBHK, selectedType, sortBy, selectedIntent]);
+           selectedIntent !== 'Buy' ||
+           showSavedOnly;
+  }, [searchQuery, selectedCity, selectedBHK, selectedType, sortBy, selectedIntent, showSavedOnly]);
 
   const parsePrice = useCallback((priceStr: string) => {
     const cleanStr = priceStr.replace(/,/g, '').toLowerCase();
@@ -177,6 +194,37 @@ export default function HomeScreen() {
     if (priceStr.toLowerCase().includes('lakh')) return num * 100_000;
     return isNaN(num) ? 0 : num;
   }, []);
+
+  const parseSqft = useCallback((sqftStr: string) => {
+    const raw = parseFloat(String(sqftStr || '').replace(/[^\d.]/g, ''));
+    return Number.isFinite(raw) ? raw : 0;
+  }, []);
+
+  const formatCurrencyShort = useCallback((value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return 'NA';
+    if (value >= 10_000_000) return `Rs ${(value / 10_000_000).toFixed(2)} Cr`;
+    if (value >= 100_000) return `Rs ${(value / 100_000).toFixed(1)} Lakh`;
+    return `Rs ${Math.round(value).toLocaleString('en-IN')}`;
+  }, []);
+
+  const calculateMonthlyEmi = useCallback((propertyPrice: number) => {
+    if (!Number.isFinite(propertyPrice) || propertyPrice <= 0) return 0;
+    const loanAmount = propertyPrice * 0.8;
+    const monthlyRate = 8.5 / 12 / 100;
+    const months = 20 * 12;
+    const factor = (1 + monthlyRate) ** months;
+    return Math.round((loanAmount * monthlyRate * factor) / (factor - 1));
+  }, []);
+
+  const getDeterministicMatchScore = useCallback((propertyId: string) => {
+    const contextSeed = `${propertyId}:${selectedCity}:${selectedBHK}:${selectedType}:${selectedIntent}:${searchQuery.trim().toLowerCase()}`;
+    let hash = 0;
+    for (let i = 0; i < contextSeed.length; i += 1) {
+      hash = (hash << 5) - hash + contextSeed.charCodeAt(i);
+      hash |= 0;
+    }
+    return 86 + (Math.abs(hash) % 14);
+  }, [searchQuery, selectedCity, selectedBHK, selectedType, selectedIntent]);
 
   const allProperties = useMemo(() => 
     Object.keys(PROPERTIES_DATA).map(id => ({ id, ...PROPERTIES_DATA[id] })), 
@@ -190,6 +238,51 @@ export default function HomeScreen() {
     const uniqueCities = new Set(allProperties.map(p => p.location.split(',').pop()?.trim()));
     return ['All', ...Array.from(uniqueCities).sort()];
   }, [allProperties]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadSavedProperties = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SAVED_PROPERTIES_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (isMounted && Array.isArray(parsed)) {
+          setSavedPropertyIds(parsed.filter((id): id is string => typeof id === 'string'));
+        }
+      } catch {
+        // Ignore storage errors and continue with empty saved list.
+      }
+    };
+    loadSavedProperties();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(SAVED_PROPERTIES_STORAGE_KEY, JSON.stringify(savedPropertyIds)).catch(() => {
+      // Ignore transient storage failures.
+    });
+  }, [savedPropertyIds]);
+
+  const toggleSavedProperty = useCallback((propertyId: string) => {
+    setSavedPropertyIds(prev => (
+      prev.includes(propertyId) ? prev.filter(id => id !== propertyId) : [...prev, propertyId]
+    ));
+  }, []);
+
+  const toggleCompareProperty = useCallback((propertyId: string) => {
+    setComparePropertyIds(prev => {
+      if (prev.includes(propertyId)) {
+        return prev.filter(id => id !== propertyId);
+      }
+      if (prev.length >= MAX_COMPARE_PROPERTIES) {
+        Alert.alert('Compare Limit Reached', `You can compare up to ${MAX_COMPARE_PROPERTIES} properties at once.`);
+        return prev;
+      }
+      return [...prev, propertyId];
+    });
+  }, []);
 
   const filteredProperties = useMemo(() => {
     let result = allProperties.filter(p => {
@@ -219,11 +312,15 @@ export default function HomeScreen() {
         matchesIntent = !p.price.toLowerCase().includes('rent') && !p.price.toLowerCase().includes('/mo');
       }
 
-      return matchesSearch && matchesCity && matchesBHK && matchesType && matchesIntent;
+      const matchesSaved = !showSavedOnly || savedPropertyIds.includes(p.id);
+      return matchesSearch && matchesCity && matchesBHK && matchesType && matchesIntent && matchesSaved;
     }).map(p => ({
       ...p,
-      // Generate a unique "Match Score" based on search/filters (simulated AI)
-      matchScore: Math.floor(Math.random() * (99 - 85 + 1) + 85)
+      matchScore: getDeterministicMatchScore(p.id),
+      priceValue: parsePrice(p.price),
+      sqftValue: parseSqft(p.sqft),
+      estimatedEmi: calculateMonthlyEmi(parsePrice(p.price)),
+      pricePerSqftValue: parseSqft(p.sqft) > 0 ? Math.round(parsePrice(p.price) / parseSqft(p.sqft)) : 0,
     }));
 
     if (sortBy === 'low-to-high') {
@@ -233,7 +330,51 @@ export default function HomeScreen() {
     }
 
     return result;
-  }, [searchQuery, selectedCity, sortBy, selectedBHK, selectedType, selectedIntent, allProperties, parsePrice]);
+  }, [
+    searchQuery,
+    selectedCity,
+    sortBy,
+    selectedBHK,
+    selectedType,
+    selectedIntent,
+    showSavedOnly,
+    savedPropertyIds,
+    allProperties,
+    parsePrice,
+    parseSqft,
+    calculateMonthlyEmi,
+    getDeterministicMatchScore,
+  ]);
+
+  const compareProperties = useMemo(
+    () => comparePropertyIds.map(id => allProperties.find(p => p.id === id)).filter(Boolean) as any[],
+    [comparePropertyIds, allProperties]
+  );
+
+  const marketSnapshot = useMemo(() => {
+    if (!filteredProperties.length) {
+      return {
+        listingCount: 0,
+        avgPrice: 'NA',
+        avgPricePerSqft: 'NA',
+        readyToMoveCount: 0,
+      };
+    }
+
+    const totalPrice = filteredProperties.reduce((sum, item) => sum + (item.priceValue || 0), 0);
+    const validPsfValues = filteredProperties
+      .map(item => item.pricePerSqftValue || 0)
+      .filter(value => value > 0);
+    const totalPsf = validPsfValues.reduce((sum, value) => sum + value, 0);
+    const readyToMoveCount = filteredProperties.filter(item => item.status === 'Ready to Move').length;
+
+    return {
+      listingCount: filteredProperties.length,
+      avgPrice: formatCurrencyShort(totalPrice / filteredProperties.length),
+      avgPricePerSqft: validPsfValues.length ? `Rs ${Math.round(totalPsf / validPsfValues.length).toLocaleString('en-IN')}/sqft` : 'NA',
+      readyToMoveCount,
+    };
+  }, [filteredProperties, formatCurrencyShort]);
 
   const renderProperty = ({ item }: { item: any }) => {
     return (
@@ -241,13 +382,23 @@ export default function HomeScreen() {
       style={({ hovered }) => [
         styles.card, 
         isMobile && styles.cardCompact,
-        isMobile && { marginHorizontal: mobileGutter },
-        { width: numColumns === 1 ? undefined : numColumns === 2 ? '48.5%' : '31.5%' },
+        savedPropertyIds.includes(item.id) && styles.cardSaved,
+        numColumns === 1 ? styles.cardSingleColumn : { width: numColumns === 2 ? '48.5%' : '31.5%' },
         hovered && Platform.OS === 'web' && styles.cardHover
       ]}
       onPress={() => router.push(`/property/${item.id}`)}
     >
       <Image source={{ uri: item.image }} style={[styles.image, isMobile && styles.imageCompact]} contentFit="cover" />
+      <TouchableOpacity
+        style={[styles.cardIconButton, styles.saveIconButton, savedPropertyIds.includes(item.id) && styles.saveIconButtonActive]}
+        onPress={() => toggleSavedProperty(item.id)}
+      >
+        <Ionicons
+          name={savedPropertyIds.includes(item.id) ? 'heart' : 'heart-outline'}
+          size={16}
+          color={savedPropertyIds.includes(item.id) ? '#ef4444' : '#cbd5e1'}
+        />
+      </TouchableOpacity>
       <View style={styles.matchBadge}>
         <Ionicons name="flash" size={10} color="#020617" />
         <Text style={styles.matchBadgeText}>{item.matchScore}% Match</Text>
@@ -268,22 +419,37 @@ export default function HomeScreen() {
           <Text style={[styles.price, isMobile && styles.priceMobile]}>{item.price}</Text>
           <Text style={styles.sqft}>{item.sqft} sqft</Text>
         </View>
-        <View style={[styles.cardActions, isSmallMobile && styles.cardActionsStack]}>
+        <View style={styles.metaRow}>
+          <Text style={styles.metaText}>EMI from {formatCurrencyShort(item.estimatedEmi)}/mo</Text>
+          <Text style={styles.metaText}>{item.pricePerSqftValue ? `Rs ${item.pricePerSqftValue.toLocaleString('en-IN')}/sqft` : 'Price on request'}</Text>
+        </View>
+        <View style={[styles.cardActions, isCompactMobile && styles.cardActionsStack]}>
           <TouchableOpacity 
-            style={[styles.viewDetailsBtn, isMobile && { paddingVertical: 8 }, isSmallMobile && styles.actionBtnStack]}
+            style={[styles.viewDetailsBtn, isMobile && styles.mobileActionButton, isCompactMobile && styles.actionBtnStack]}
             onPress={() => router.push({ pathname: '/property/[id]', params: { id: item.id } } as any)}
           >
             <Text style={styles.viewDetailsText}>View Details</Text>
           </TouchableOpacity>
           {item.rooms && item.rooms.length > 0 && (
             <TouchableOpacity 
-              style={[styles.virtualTourBtn, isMobile && { paddingVertical: 8 }, isSmallMobile && styles.actionBtnStack]}
+              style={[styles.virtualTourBtn, isMobile && styles.mobileActionButton, isCompactMobile && styles.actionBtnStack]}
               onPress={() => router.push({ pathname: '/property/[id]', params: { id: item.id, virtualTour: 'true' } } as any)}
             >
               <Ionicons name="scan-outline" size={16} color="#22d3ee" />
-              <Text style={styles.virtualTourBtnText}>360° Tour</Text>
+              <Text style={styles.virtualTourBtnText}>360 Tour</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity 
+            style={[styles.compareBtn, isMobile && styles.mobileActionButton, isCompactMobile && styles.actionBtnStack]}
+            onPress={() => toggleCompareProperty(item.id)}
+          >
+            <Ionicons
+              name={comparePropertyIds.includes(item.id) ? 'git-compare' : 'git-compare-outline'}
+              size={16}
+              color="#fbbf24"
+            />
+            <Text style={styles.compareBtnText}>{comparePropertyIds.includes(item.id) ? 'Added' : 'Compare'}</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Pressable>
@@ -304,18 +470,19 @@ export default function HomeScreen() {
           styles.list, 
           isLargeScreen && styles.listLarge,
           !isMobile && { padding: listPadding },
-          isMobile && { paddingBottom: 80 }
+          isMobile && styles.listMobile,
+          isMobile && { paddingHorizontal: pageGutter, paddingBottom: 48 }
         ]}
         columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : null}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={[styles.header, isMobile && styles.headerMobile]} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
-            <View style={[styles.headerTop, isMobile && styles.headerStack, isMobile && { paddingHorizontal: mobileGutter }]}>
+            <View style={[styles.headerTop, isMobile && styles.headerStack, isMobile && styles.headerTopMobile, isMobile && { paddingHorizontal: sectionInlinePadding }]}>
               {!isPropertiesView ? (
-                <View style={{ flex: isLargeScreen ? 1 : undefined, width: isLargeScreen ? 'auto' : '100%' }}>
+                <View style={[styles.heroTextBlock, isLargeScreen && styles.heroTextBlockLarge]}>
                   <Animated.Text 
                     entering={FadeInDown.duration(1000).springify()}
-                    style={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall]}
+                    style={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall, isXsMobile && styles.welcomeXs]}
                   >
                   {"Find your dream home".split('').map((char, index) => (
                     <ShimmerChar 
@@ -324,13 +491,13 @@ export default function HomeScreen() {
                       index={index} 
                       total={20} 
                       isAccent={index >= 10}
-                      baseStyle={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall]}
+                      baseStyle={[styles.welcome, isMobile && styles.welcomeMobile, isSmallMobile && styles.welcomeSmall, isXsMobile && styles.welcomeXs]}
                     />
                   ))}
                   </Animated.Text>
                   <Animated.Text 
                     entering={FadeInDown.delay(200).duration(1000).springify()}
-                    style={[styles.subtitle, isMobile && styles.subtitleMobile, isSmallMobile && styles.subtitleSmall]}
+                    style={[styles.subtitle, isMobile && styles.subtitleMobile, isSmallMobile && styles.subtitleSmall, isXsMobile && styles.subtitleXs]}
                   >
                     Handpicked premium properties for you
                   </Animated.Text>
@@ -350,48 +517,66 @@ export default function HomeScreen() {
                     <Text style={styles.heroCTAText}>Buy • Rent • Invest in top cities</Text>
                     <View style={[styles.heroCTAButtons, isMobile && styles.ctaWrap]}>
                       <TouchableOpacity 
-                        style={[styles.heroCTAButton, isMobile && { paddingHorizontal: 16, paddingVertical: 8 }, selectedIntent === 'Buy' && styles.heroCTAButtonActive]}
+                        style={[
+                          styles.heroCTAButton,
+                          isMobile && styles.heroCTAButtonMobile,
+                          isCompactMobile && styles.heroCTAButtonCompact,
+                          isXsMobile && styles.heroCTAButtonXs,
+                          selectedIntent === 'Buy' && styles.heroCTAButtonActive
+                        ]}
                         onPress={() => {
                           setSelectedIntent('Buy');
                           scrollToProperties();
                         }}
                       >
-                        <Text style={[styles.heroCTAButtonText, selectedIntent === 'Buy' && styles.heroCTAButtonTextActive]}>Buy</Text>
+                        <Text style={[styles.heroCTAButtonText, isMobile && styles.heroCTAButtonTextMobile, selectedIntent === 'Buy' && styles.heroCTAButtonTextActive]}>Buy</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
-                        style={[styles.heroCTAButton, isMobile && { paddingHorizontal: 16, paddingVertical: 8 }, selectedIntent === 'Rent' && styles.heroCTAButtonActive]}
+                        style={[
+                          styles.heroCTAButton,
+                          isMobile && styles.heroCTAButtonMobile,
+                          isCompactMobile && styles.heroCTAButtonCompact,
+                          isXsMobile && styles.heroCTAButtonXs,
+                          selectedIntent === 'Rent' && styles.heroCTAButtonActive
+                        ]}
                         onPress={() => {
                           setSelectedIntent('Rent');
                           scrollToProperties();
                         }}
                       >
-                        <Text style={[styles.heroCTAButtonText, selectedIntent === 'Rent' && styles.heroCTAButtonTextActive]}>Rent</Text>
+                        <Text style={[styles.heroCTAButtonText, isMobile && styles.heroCTAButtonTextMobile, selectedIntent === 'Rent' && styles.heroCTAButtonTextActive]}>Rent</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
-                        style={[styles.heroCTAButton, isMobile && { paddingHorizontal: 16, paddingVertical: 8 }, selectedIntent === 'New Projects' && styles.heroCTAButtonActive]}
+                        style={[
+                          styles.heroCTAButton,
+                          isMobile && styles.heroCTAButtonMobile,
+                          isCompactMobile && styles.heroCTAButtonCompact,
+                          isXsMobile && styles.heroCTAButtonXs,
+                          selectedIntent === 'New Projects' && styles.heroCTAButtonActive
+                        ]}
                         onPress={() => {
                           setSelectedIntent('New Projects');
                           scrollToProperties();
                         }}
                       >
-                        <Text style={[styles.heroCTAButtonText, selectedIntent === 'New Projects' && styles.heroCTAButtonTextActive]}>New Projects</Text>
+                        <Text style={[styles.heroCTAButtonText, isMobile && styles.heroCTAButtonTextMobile, selectedIntent === 'New Projects' && styles.heroCTAButtonTextActive]}>New Projects</Text>
                       </TouchableOpacity>
                     </View>
                   </Animated.View>
                 </View>
               ) : (
-                <View style={{ flex: 1 }}>
+                <View style={styles.heroTextBlock}>
                   <Text style={styles.welcome}>All Properties</Text>
                   <Text style={styles.subtitle}>Browse our extensive collection of premium homes</Text>
                 </View>
               )}
               {hasActiveFilters && (
-                <TouchableOpacity onPress={clearAllFilters} style={[styles.clearButton, isMobile && { marginTop: 12, alignSelf: 'flex-start' }]}>
+                <TouchableOpacity onPress={clearAllFilters} style={[styles.clearButton, isMobile && styles.clearButtonMobile]}>
                   <Text style={styles.clearButtonText}>Clear All</Text>
                 </TouchableOpacity>
               )}
             </View>
-            <View style={[styles.searchContainer, isMobile && { marginTop: 16, marginHorizontal: mobileGutter }]}>
+            <View style={[styles.searchContainer, isMobile && styles.searchContainerMobile, isMobile && { marginTop: sectionSpacing, marginHorizontal: sectionInlinePadding }]}>
               <Ionicons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
               <TextInput
                 placeholder="Search by location or property name..."
@@ -408,12 +593,12 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.trendingSection}>
-              <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: mobileGutter }]}>Trending Localities</Text>
+            <View style={[styles.trendingSection, isMobile && { marginTop: sectionSpacing + 8 }]}>
+              <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Trending Localities</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.trendingScroll, isMobile && { paddingHorizontal: mobileGutter }]}
+                contentContainerStyle={[styles.trendingScroll, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
                 {TRENDING_LOCALITIES.map((item) => (
                   <TouchableOpacity 
@@ -432,11 +617,11 @@ export default function HomeScreen() {
 
             {!isPropertiesView && featuredProperties.length > 0 && !hasActiveFilters && (
               <View style={styles.featuredSection}>
-                <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: mobileGutter }]}>Featured Properties</Text>
+                <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Featured Properties</Text>
                 <ScrollView 
                   horizontal 
                   showsHorizontalScrollIndicator={false} 
-                  contentContainerStyle={[styles.featuredContent, isMobile && { paddingHorizontal: mobileGutter }]}
+                  contentContainerStyle={[styles.featuredContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
                 >
                   {featuredProperties.map(item => (
                     <Pressable 
@@ -470,7 +655,7 @@ export default function HomeScreen() {
               horizontal 
               showsHorizontalScrollIndicator={false} 
               style={styles.cityFilterContainer}
-              contentContainerStyle={[styles.cityFilterContent, isMobile && { paddingHorizontal: mobileGutter }]}
+              contentContainerStyle={[styles.cityFilterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
             >
               {cities.map(city => (
                 <Pressable 
@@ -488,18 +673,18 @@ export default function HomeScreen() {
             </ScrollView>
 
             <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: mobileGutter }]}>Filter by BHK:</Text>
+              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Filter by BHK:</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: mobileGutter }]}
+                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
                 {['All', '1 BHK', '2 BHK', '3 BHK', '4+ BHK'].map(bhk => (
                   <Pressable 
                     key={bhk} 
                     style={({ hovered }) => [
                       styles.filterChip, 
-                      isMobile && { paddingVertical: 10, paddingHorizontal: 16 },
+                      isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
                       selectedBHK === bhk && styles.filterChipActive,
                       hovered && Platform.OS === 'web' && selectedBHK !== bhk && styles.chipHover
                     ]}
@@ -512,18 +697,18 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: mobileGutter }]}>Property Type:</Text>
+              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Property Type:</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: mobileGutter }]}
+                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
                 {['All', 'Apartment', 'Villa'].map(type => (
                   <Pressable 
                     key={type} 
                     style={({ hovered }) => [
                       styles.filterChip, 
-                      isMobile && { paddingVertical: 10, paddingHorizontal: 16 },
+                      isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
                       selectedType === type && styles.filterChipActive,
                       hovered && Platform.OS === 'web' && selectedType !== type && styles.chipHover
                     ]}
@@ -536,11 +721,11 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.sortSection}>
-              <Text style={[styles.sortLabel, isMobile && { paddingHorizontal: mobileGutter }]}>Sort by Price:</Text>
+              <Text style={[styles.sortLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Sort by Price:</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.sortContent, isMobile && { paddingHorizontal: mobileGutter }]}
+                contentContainerStyle={[styles.sortContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
                 {[
                   { label: 'Default', value: 'default' },
@@ -551,7 +736,7 @@ export default function HomeScreen() {
                     key={option.value} 
                     style={({ hovered }) => [
                       styles.sortChip, 
-                      isMobile && { paddingVertical: 10, paddingHorizontal: 16 },
+                      isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
                       sortBy === option.value && styles.sortChipActive,
                       hovered && Platform.OS === 'web' && sortBy !== option.value && styles.chipHover
                     ]}
@@ -563,12 +748,57 @@ export default function HomeScreen() {
               </ScrollView>
             </View>
 
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterLabel, isMobile && { paddingHorizontal: sectionInlinePadding }]}>Saved Properties:</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[styles.filterContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
+              >
+                <Pressable
+                  style={({ hovered }) => [
+                    styles.filterChip,
+                    isMobile && { paddingVertical: 10, paddingHorizontal: 12 + chipSpacing },
+                    showSavedOnly && styles.filterChipActive,
+                    hovered && Platform.OS === 'web' && !showSavedOnly && styles.chipHover
+                  ]}
+                  onPress={() => setShowSavedOnly(prev => !prev)}
+                >
+                  <Text style={[styles.filterChipText, showSavedOnly && styles.filterChipTextActive]}>
+                    Saved Only ({savedPropertyIds.length})
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+
+            <View style={[styles.insightsSection, isMobile && { marginHorizontal: sectionInlinePadding }]}>
+              <Text style={styles.insightsTitle}>Market Snapshot</Text>
+              <View style={[styles.insightsGrid, isCompactMobile && styles.insightsGridCompact]}>
+                <View style={styles.insightCard}>
+                  <Text style={styles.insightLabel}>Listings</Text>
+                  <Text style={styles.insightValue}>{marketSnapshot.listingCount}</Text>
+                </View>
+                <View style={styles.insightCard}>
+                  <Text style={styles.insightLabel}>Avg. Price</Text>
+                  <Text style={styles.insightValue}>{marketSnapshot.avgPrice}</Text>
+                </View>
+                <View style={styles.insightCard}>
+                  <Text style={styles.insightLabel}>Avg. Price / sqft</Text>
+                  <Text style={styles.insightValue}>{marketSnapshot.avgPricePerSqft}</Text>
+                </View>
+                <View style={styles.insightCard}>
+                  <Text style={styles.insightLabel}>Ready to Move</Text>
+                  <Text style={styles.insightValue}>{marketSnapshot.readyToMoveCount}</Text>
+                </View>
+              </View>
+            </View>
+
             <View style={styles.testimonialsSection}>
-              <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: mobileGutter }]}>What Our Clients Say</Text>
+              <Text style={[styles.featuredTitle, isMobile && { paddingHorizontal: sectionInlinePadding }]}>What Our Clients Say</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={[styles.testimonialsContent, isMobile && { paddingHorizontal: mobileGutter }]}
+                contentContainerStyle={[styles.testimonialsContent, isMobile && { paddingHorizontal: sectionInlinePadding }]}
               >
                 {TESTIMONIALS.map(item => (
                   <Pressable 
@@ -598,7 +828,7 @@ export default function HomeScreen() {
                         />
                       ))}
                     </View>
-                    <Text style={styles.testimonialComment}>"{item.comment}"</Text>
+                    <Text style={styles.testimonialComment}>{`"${item.comment}"`}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -611,14 +841,14 @@ export default function HomeScreen() {
             style={[
               styles.footerContainer, 
               isMobile && styles.footerContainerMobile,
-              isMobile && { paddingHorizontal: mobileGutter, paddingBottom: 80 }
+              isMobile && { paddingHorizontal: sectionInlinePadding, paddingBottom: 48 }
             ]}
           >
             <View style={[styles.footerTopSection, !isMobile && { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }]}>
               <View style={[styles.footerBrandSection, !isMobile && { maxWidth: '50%' }]}>
                 <Text style={styles.footerBrandName}>EstatePerks</Text>
                 <Text style={styles.footerTagline}>
-                  Discover premium residential properties across India's top cities. Your journey to a dream home starts here.
+                  Discover premium residential properties across India&apos;s top cities. Your journey to a dream home starts here.
                 </Text>
                 <View style={[styles.trustRow, isCompactMobile && styles.trustRowCompact]}>
                   <View style={styles.trustItem}><Text style={styles.trustValue}>20k+</Text><Text style={styles.trustLabel}>Families</Text></View>
@@ -806,12 +1036,74 @@ export default function HomeScreen() {
         style={({ hovered }) => [
           styles.floatingChatBtn,
           isCompactMobile && styles.floatingChatBtnCompact,
+          isMobile && { right: pageGutter, bottom: isCompactMobile ? 16 : 22 },
           hovered && Platform.OS === 'web' && styles.floatingChatBtnHover
         ]}
         onPress={() => setIsChatVisible(true)}
       >
-        <Ionicons name="chatbubbles" size={28} color="#020617" />
+        <Ionicons name="chatbubbles" size={isCompactMobile ? 24 : 28} color="#020617" />
       </Pressable>
+
+      {comparePropertyIds.length > 0 && (
+        <View style={[styles.compareTray, isMobile && styles.compareTrayMobile]}>
+          <View>
+            <Text style={styles.compareTrayTitle}>Compare Shortlist</Text>
+            <Text style={styles.compareTraySubtitle}>{comparePropertyIds.length}/{MAX_COMPARE_PROPERTIES} selected</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.compareTrayBtn, comparePropertyIds.length < 2 && styles.compareTrayBtnDisabled]}
+            disabled={comparePropertyIds.length < 2}
+            onPress={() => setIsCompareModalVisible(true)}
+          >
+            <Text style={styles.compareTrayBtnText}>Compare</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <Modal visible={isCompareModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: modalMaxWidth, maxHeight: modalMaxHeight }]}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderInfo}>
+                <Ionicons name="git-compare" size={24} color="#22d3ee" />
+                <Text style={styles.modalTitle}>Compare Properties</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsCompareModalVisible(false)}>
+                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {compareProperties.length === 0 ? (
+                <Text style={styles.aboutText}>No properties selected for comparison.</Text>
+              ) : (
+                compareProperties.map((property: any) => (
+                  <View key={property.id} style={styles.compareCard}>
+                    <View style={styles.compareCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.compareName}>{property.name}</Text>
+                        <Text style={styles.compareLocation}>{property.location}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => toggleCompareProperty(property.id)}>
+                        <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.compareMetrics}>
+                      <Text style={styles.compareMetric}>Price: {property.price}</Text>
+                      <Text style={styles.compareMetric}>Beds/Baths: {property.beds} / {property.baths}</Text>
+                      <Text style={styles.compareMetric}>Area: {property.sqft} sqft</Text>
+                      <Text style={styles.compareMetric}>Status: {property.status}</Text>
+                      <Text style={styles.compareMetric}>Estimated EMI: {formatCurrencyShort(calculateMonthlyEmi(parsePrice(property.price)))}/mo</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIsCompareModalVisible(false)}>
+              <Text style={styles.modalCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Support Chat Modal */}
       <Modal visible={isChatVisible} animationType="slide" transparent>
@@ -819,9 +1111,9 @@ export default function HomeScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
-          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { height: '70%', maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { height: chatModalHeight, maxWidth: modalMaxWidth, maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.modalHeaderInfo}>
                 <Ionicons name="headset" size={24} color="#22d3ee" />
                 <Text style={styles.modalTitle}>Support Chat</Text>
                 <View style={styles.onlineIndicator} />
@@ -876,9 +1168,9 @@ export default function HomeScreen() {
       {/* About Us Modal */}
       <Modal visible={isAboutModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: modalMaxWidth, maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.modalHeaderInfo}>
                 <Ionicons name="information-circle" size={24} color="#22d3ee" />
                 <Text style={styles.modalTitle}>About EstatePerks</Text>
               </View>
@@ -888,10 +1180,10 @@ export default function HomeScreen() {
             </View>
             <ScrollView>
               <Text style={styles.aboutText}>
-                EstatePerks is a premium real estate platform dedicated to helping you find your dream home across India's top cities.
+                EstatePerks is a premium real estate platform dedicated to helping you find your dream home across India&apos;s top cities.
               </Text>
               <Text style={[styles.aboutText, { marginTop: 12 }]}>
-                We combine cutting-edge technology like 360° virtual tours and AI-powered investment scores with a human-centric approach to provide a seamless property search experience.
+                We combine cutting-edge technology like 360 virtual tours and AI-powered investment scores with a human-centric approach to provide a seamless property search experience.
               </Text>
               <Text style={[styles.aboutText, { marginTop: 12 }]}>
                 Our mission is to make real estate transparent, accessible, and rewarding for everyone.
@@ -907,9 +1199,9 @@ export default function HomeScreen() {
       {/* Careers Modal */}
       <Modal visible={isCareersModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: modalMaxWidth, maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.modalHeaderInfo}>
                 <Ionicons name="briefcase" size={24} color="#22d3ee" />
                 <Text style={styles.modalTitle}>Careers at EstatePerks</Text>
               </View>
@@ -919,7 +1211,7 @@ export default function HomeScreen() {
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.aboutText}>
-                Join our mission to revolutionize the real estate industry. We're looking for passionate individuals to join our growing team.
+                Join our mission to revolutionize the real estate industry. We&apos;re looking for passionate individuals to join our growing team.
               </Text>
               
               <Text style={[styles.inputLabel, { marginTop: 20, color: '#22d3ee' }]}>Current Openings</Text>
@@ -950,9 +1242,9 @@ export default function HomeScreen() {
       {/* Privacy Policy Modal */}
       <Modal visible={isPrivacyModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: modalMaxWidth, maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.modalHeaderInfo}>
                 <Ionicons name="shield-checkmark" size={24} color="#22d3ee" />
                 <Text style={styles.modalTitle}>Privacy Policy</Text>
               </View>
@@ -990,9 +1282,9 @@ export default function HomeScreen() {
       {/* Terms of Service Modal */}
       <Modal visible={isTermsModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: 500 }]}>
+          <View style={[styles.modalContent, isCompactMobile && styles.modalContentCompact, { maxWidth: modalMaxWidth, maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.modalHeaderInfo}>
                 <Ionicons name="document-text" size={24} color="#22d3ee" />
                 <Text style={styles.modalTitle}>Terms of Service</Text>
               </View>
@@ -1040,9 +1332,16 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: '#020617',
     alignItems: 'center',
+    width: '100%',
+    minWidth: 0,
   },
   list: { 
     width: '100%',
+    minWidth: 0,
+  },
+  listMobile: {
+    width: '100%',
+    minWidth: 0,
   },
   listLarge: {
     maxWidth: 1280,
@@ -1052,12 +1351,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 24,
   },
-  header: { marginBottom: 24 },
+  header: { marginBottom: 24, width: '100%', minWidth: 0 },
   headerMobile: { marginBottom: 16 },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    width: '100%',
+    minWidth: 0,
+  },
+  headerTopMobile: {
+    gap: 12,
+  },
+  heroTextBlock: {
+    width: '100%',
+    minWidth: 0,
+  },
+  heroTextBlockLarge: {
+    flex: 1,
+    width: 'auto',
   },
   clearButton: {
     paddingHorizontal: 12,
@@ -1072,7 +1384,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  welcome: { fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: -1 },
+  clearButtonMobile: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  welcome: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: -1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   welcomeMobile: { fontSize: 26, lineHeight: 32 },
   highlight: { 
     color: '#fbbf24',
@@ -1080,7 +1403,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 15,
   },
-  subtitle: { color: '#94a3b8', fontSize: 16, marginTop: 4 },
+  subtitle: { color: '#94a3b8', fontSize: 16, marginTop: 4, flexShrink: 1, minWidth: 0 },
   subtitleMobile: { fontSize: 14 },
   marketPulse: {
     flexDirection: 'row',
@@ -1113,6 +1436,7 @@ const styles = StyleSheet.create({
   heroCTAContainer: {
     marginTop: 24,
     gap: 16,
+    width: '100%',
   },
   heroCTAText: {
     color: '#94a3b8',
@@ -1120,11 +1444,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   heroCTAButtons: {
     flexDirection: 'row',
     gap: 12,
     flexWrap: 'wrap',
+    width: '100%',
   },
   heroCTAButton: {
     paddingHorizontal: 20,
@@ -1133,6 +1460,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
     borderWidth: 1,
     borderColor: '#1e293b',
+    minWidth: 0,
+  },
+  heroCTAButtonMobile: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  heroCTAButtonCompact: {
+    flexGrow: 1,
+    flexBasis: '48%',
+    alignItems: 'center',
+  },
+  heroCTAButtonXs: {
+    flexBasis: '100%',
   },
   heroCTAButtonActive: {
     backgroundColor: '#22d3ee',
@@ -1142,6 +1482,9 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontWeight: '700',
     fontSize: 14,
+  },
+  heroCTAButtonTextMobile: {
+    fontSize: 13,
   },
   heroCTAButtonTextActive: {
     color: '#020617',
@@ -1158,6 +1501,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     overflow: 'hidden',
+    minWidth: 0,
+    width: '100%',
+  },
+  cardSingleColumn: {
+    width: '100%',
   },
   cardMobile: {
     marginBottom: 16,
@@ -1169,17 +1517,51 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
   },
+  cardSaved: {
+    borderColor: '#f43f5e',
+  },
+  cardIconButton: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  saveIconButton: {
+    backgroundColor: 'rgba(2, 6, 23, 0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.3)',
+  },
+  saveIconButtonActive: {
+    borderColor: 'rgba(244, 63, 94, 0.6)',
+    backgroundColor: 'rgba(30, 41, 59, 0.95)',
+  },
   image: { width: '100%', height: 200 },
-  info: { padding: 16 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { fontSize: 18, fontWeight: '800', color: '#fff', flex: 1, marginRight: 8 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  info: { padding: 16, minWidth: 0 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minWidth: 0 },
+  name: { fontSize: 18, fontWeight: '800', color: '#fff', flex: 1, marginRight: 8, minWidth: 0 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, minWidth: 0 },
   ratingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(251, 191, 36, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   ratingText: { color: '#fbbf24', fontWeight: 'bold', fontSize: 12 },
-  location: { color: '#94a3b8', fontSize: 13, flex: 1 },
-  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  price: { fontSize: 18, fontWeight: 'bold', color: '#22d3ee' },
+  location: { color: '#94a3b8', fontSize: 13, flex: 1, minWidth: 0 },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, minWidth: 0 },
+  price: { fontSize: 18, fontWeight: 'bold', color: '#22d3ee', flexShrink: 1 },
   sqft: { color: '#64748b', fontSize: 14 },
+  metaRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  metaText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    flex: 1,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1189,7 +1571,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    minWidth: 0,
     ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(10px)' } as any) : {}),
+  },
+  searchContainerMobile: {
+    marginTop: 16,
   },
   searchIcon: { marginRight: 8 },
   searchInput: {
@@ -1241,12 +1627,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+    minWidth: 0,
+    flexWrap: 'wrap',
   },
   cardActionsStack: {
     flexDirection: 'column',
   },
   actionBtnStack: {
     width: '100%',
+    flexBasis: '100%',
+  },
+  mobileActionButton: {
+    paddingVertical: 8,
   },
   viewDetailsBtn: {
     flex: 1,
@@ -1256,6 +1648,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(34, 211, 238, 0.3)',
+    minWidth: 0,
   },
   viewDetailsText: {
     color: '#22d3ee',
@@ -1273,9 +1666,28 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: 'rgba(34, 211, 238, 0.3)',
+    minWidth: 0,
   },
   virtualTourBtnText: {
     color: '#22d3ee',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  compareBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    minWidth: 0,
+  },
+  compareBtnText: {
+    color: '#fbbf24',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -1339,6 +1751,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 8,
     marginLeft: 4,
+    minWidth: 0,
   },
   filterContent: {
     paddingRight: 20,
@@ -1374,6 +1787,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 8,
     marginLeft: 4,
+    minWidth: 0,
   },
   sortContent: {
     paddingRight: 20,
@@ -1399,6 +1813,47 @@ const styles = StyleSheet.create({
   sortChipTextActive: {
     color: '#22d3ee',
   },
+  insightsSection: {
+    marginTop: 24,
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 16,
+    padding: 14,
+  },
+  insightsTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  insightsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  insightsGridCompact: {
+    gap: 8,
+  },
+  insightCard: {
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    width: '48%',
+  },
+  insightLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  insightValue: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   featuredSection: {
     marginTop: 24,
   },
@@ -1408,6 +1863,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 12,
     marginLeft: 4,
+    minWidth: 0,
   },
   featuredContent: {
     paddingRight: 20,
@@ -1474,14 +1930,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderTopWidth: 1,
     borderTopColor: '#22d3ee',
+    width: '100%',
+    minWidth: 0,
   },
   footerContainerMobile: {
     marginTop: 40,
     paddingTop: 40,
-    paddingBottom: 40,
+    paddingBottom: 36,
   },
   footerTopSection: {
     marginBottom: 60,
+    gap: 20,
   },
   footerBrandSection: {
     marginBottom: 24,
@@ -1562,6 +2021,7 @@ const styles = StyleSheet.create({
   },
   newsletterInputRowCompact: {
     flexDirection: 'column',
+    gap: 10,
   },
   newsletterInput: {
     flex: 1,
@@ -1626,11 +2086,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 24,
+    width: '100%',
   },
   footerGridCompact: {
     gap: 16,
   },
   footerColumn: {
+    minWidth: 0,
   },
   footerSectionTitle: {
     color: '#fff',
@@ -1658,6 +2120,7 @@ const styles = StyleSheet.create({
   },
   socialRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 20,
     marginBottom: 30,
   },
@@ -1814,12 +2277,57 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.1 }],
     backgroundColor: '#67e8f9',
   },
+  compareTray: {
+    position: 'absolute',
+    left: 16,
+    right: 96,
+    bottom: 26,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 99,
+  },
+  compareTrayMobile: {
+    left: 12,
+    right: 76,
+    bottom: 16,
+  },
+  compareTrayTitle: {
+    color: '#e2e8f0',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  compareTraySubtitle: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  compareTrayBtn: {
+    backgroundColor: '#22d3ee',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  compareTrayBtnDisabled: {
+    backgroundColor: '#334155',
+  },
+  compareTrayBtnText: {
+    color: '#020617',
+    fontWeight: '800',
+    fontSize: 12,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(2, 6, 23, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
   modalContent: {
     backgroundColor: '#0f172a',
@@ -1828,6 +2336,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     borderColor: '#1e293b',
+    minWidth: 0,
   },
   modalContentCompact: {
     padding: 18,
@@ -1838,8 +2347,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    gap: 12,
+    minWidth: 0,
   },
-  modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  modalHeaderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800', flexShrink: 1 },
   onlineIndicator: {
     width: 8,
     height: 8,
@@ -1878,7 +2396,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  chatInputContainer: { flexDirection: 'row', gap: 10, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#1e293b' },
+  chatInputContainer: { flexDirection: 'row', gap: 10, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#1e293b', minWidth: 0, alignItems: 'center' },
   chatInput: { 
     flex: 1, 
     backgroundColor: '#020617', 
@@ -1888,7 +2406,8 @@ const styles = StyleSheet.create({
     color: '#fff', 
     fontSize: 14, 
     borderWidth: 1, 
-    borderColor: '#334155' 
+    borderColor: '#334155',
+    minWidth: 0,
   },
   chatSendBtn: { 
     backgroundColor: '#22d3ee', 
@@ -1902,6 +2421,38 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 15,
     lineHeight: 24,
+  },
+  compareCard: {
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+  compareCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  compareName: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  compareLocation: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  compareMetrics: {
+    marginTop: 10,
+    gap: 5,
+  },
+  compareMetric: {
+    color: '#cbd5e1',
+    fontSize: 13,
   },
   modalCloseBtn: {
     backgroundColor: '#22d3ee',
@@ -1949,16 +2500,25 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-start',
     gap: 12,
+    width: '100%',
   },
   welcomeSmall: {
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 21,
+    lineHeight: 27,
+  },
+  welcomeXs: {
+    fontSize: 20,
+    lineHeight: 26,
   },
   subtitleSmall: {
     fontSize: 13,
   },
+  subtitleXs: {
+    fontSize: 12,
+  },
   ctaWrap: {
     flexWrap: 'wrap',
+    gap: 8,
   },
   cardCompact: {
     borderRadius: 14,
@@ -1969,10 +2529,11 @@ const styles = StyleSheet.create({
   },
   footerColumnMobile: {
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   newsletterMobile: {
     padding: 16,
+    width: '100%',
   },
   infoMobile: {
     padding: 12,
@@ -1984,3 +2545,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+

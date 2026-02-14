@@ -152,6 +152,8 @@ interface Property {
   [key: string]: any;
 }
 
+type PropertyListItem = Property & { id: string };
+
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 import { 
@@ -171,6 +173,8 @@ import { PROPERTIES_DATA } from '../../constants/propertiesData';
 export default function PropertyDetails() {
   const params = useLocalSearchParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const resolvedPropertyId =
+    propertyId && PROPERTIES_DATA[propertyId] ? propertyId : '1';
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const { addVisit } = useVisit() as { addVisit?: (visit: any) => void };
@@ -197,15 +201,13 @@ export default function PropertyDetails() {
     isSmallMobile && styles.sectionCardSmall,
   ];
 
-  const property: Property =
-    (propertyId && PROPERTIES_DATA[propertyId]) ||
-    PROPERTIES_DATA['1'];
+  const property: Property = PROPERTIES_DATA[resolvedPropertyId];
 
   const [activeTab, setActiveTab] = useState('Overview');
 
   const [viewMode, setViewMode] = useState<'image' | '3d' | 'video'>('image');
   const [isFavorited, setIsFavorited] = useState(false);
-  const [isFeatured, setIsFeatured] = useState(!!property.isFeatured || propertyId === '1');
+  const [isFeatured, setIsFeatured] = useState(!!property.isFeatured || resolvedPropertyId === '1');
   const [isPriceDropAlertActive, setIsPriceDropAlertActive] = useState(false);
   const [isMuted, setIsMuted] = useState(true); // Default to true for web autoplay
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -294,7 +296,7 @@ export default function PropertyDetails() {
     } else if (property.rooms && !currentRoomId) {
       setCurrentRoomId(property.rooms[0].id);
     }
-  }, [isVirtualTourVisible]);
+  }, [isVirtualTourVisible, property.rooms, currentRoomId, tourX, tourOverlayOpacity]);
 
   // Gyroscope Effect
   useEffect(() => {
@@ -396,15 +398,131 @@ export default function PropertyDetails() {
   const [filterReraOnly, setFilterReraOnly] = useState(true);
   const [isSearchSaved, setIsSearchSaved] = useState(false);
   const [recentSearches, setRecentSearches] = useState<any[]>([]);
+  const [isFiltersApplied, setIsFiltersApplied] = useState(false);
+
+  useEffect(() => {
+    setIsFeatured(!!property.isFeatured || resolvedPropertyId === '1');
+    setIsFavorited(false);
+    setIsPriceDropAlertActive(false);
+    setIsFiltersApplied(false);
+    setChatMessages([
+      { id: '1', text: `Hi! I'm your AI assistant for ${property.name}. How can I help you today?`, sender: 'ai' }
+    ]);
+  }, [resolvedPropertyId, property.isFeatured, property.name]);
 
   const lastTapRef = useRef<{ time: number; side: 'left' | 'right' | null }>({ time: 0, side: null });
 
-  const similarProperties = useMemo(() => 
+  const similarProperties = useMemo<PropertyListItem[]>(() =>
     Object.keys(PROPERTIES_DATA)
-      .filter((key) => key !== propertyId)
+      .filter((key) => key !== resolvedPropertyId)
       .map((key) => ({ id: key, ...PROPERTIES_DATA[key] })),
-    [propertyId]
+    [resolvedPropertyId]
   );
+
+  const propertyPriceValue = useMemo(() => parsePrice(property.price || '0'), [property.price]);
+  const propertySqftValue = useMemo(() => {
+    return parseFloat(String(property.sqft || '0').replace(/,/g, '')) || 0;
+  }, [property.sqft]);
+  const propertyPricePerSqft = useMemo(() => {
+    if (!propertyPriceValue || !propertySqftValue) return 0;
+    return Math.round(propertyPriceValue / propertySqftValue);
+  }, [propertyPriceValue, propertySqftValue]);
+  const localityAvgPricePerSqft = useMemo(() => parsePrice(property.avgPrice || '0'), [property.avgPrice]);
+  const localityPriceDelta = useMemo(() => {
+    if (!propertyPricePerSqft || !localityAvgPricePerSqft) return null;
+    const rawDiff = propertyPricePerSqft - localityAvgPricePerSqft;
+    return {
+      isAbove: rawDiff > 0,
+      diff: Math.abs(rawDiff),
+      percent: Math.abs((rawDiff / localityAvgPricePerSqft) * 100).toFixed(1),
+    };
+  }, [propertyPricePerSqft, localityAvgPricePerSqft]);
+
+  const cityName = useMemo(() => {
+    const parts = property.location.split(',').map(p => p.trim()).filter(Boolean);
+    return parts[parts.length - 1] || property.location;
+  }, [property.location]);
+
+  const getFilteredProperties = (list: PropertyListItem[]) => {
+    const budgetLimit = parsePrice(filterBudget || '0');
+    const needs4Plus = filterBHK.includes('4+');
+    const bhkCount = parseInt(filterBHK, 10);
+    const normalizedBuilder = filterBuilder.trim().toLowerCase();
+
+    return list.filter((candidate) => {
+      const candidatePrice = parsePrice(candidate.price || '0');
+      const candidateStatus = String(candidate.status || '').toLowerCase();
+      const candidatePossession = String(candidate.possession || '').toLowerCase();
+      const candidateAmenities = Object.values(candidate.amenities || {})
+        .flat()
+        .map((item) => String(item).toLowerCase());
+      const isReadyProperty = candidateStatus.includes('ready') || candidatePossession.includes('immediate');
+      const possessionMatch =
+        filterPossession === 'Under Construction'
+          ? candidateStatus.includes('under construction')
+          : isReadyProperty;
+      const bhkMatch = needs4Plus
+        ? (candidate.beds || 0) >= 4
+        : Number.isNaN(bhkCount)
+          ? true
+          : (candidate.beds || 0) === bhkCount;
+      const amenitiesMatch = filterAmenities.every((amenity) =>
+        candidateAmenities.some((item) => item.includes(amenity.toLowerCase()))
+      );
+      const builderMatch =
+        !normalizedBuilder ||
+        String(candidate.builder || '').toLowerCase().includes(normalizedBuilder);
+
+      return (
+        (!budgetLimit || candidatePrice <= budgetLimit) &&
+        (!filterPropertyType || candidate.type === filterPropertyType) &&
+        bhkMatch &&
+        possessionMatch &&
+        builderMatch &&
+        amenitiesMatch &&
+        (!filterReraOnly || Boolean(candidate.reraId))
+      );
+    });
+  };
+
+  const filteredSimilarProperties = useMemo(() => {
+    if (!isFiltersApplied) return similarProperties;
+    return getFilteredProperties(similarProperties);
+  }, [
+    isFiltersApplied,
+    similarProperties,
+    filterBudget,
+    filterPropertyType,
+    filterBHK,
+    filterPossession,
+    filterBuilder,
+    filterAmenities,
+    filterReraOnly,
+  ]);
+
+  const recommendedProperties = useMemo(() => {
+    const cityToken = cityName.toLowerCase();
+
+    return filteredSimilarProperties
+      .map((candidate) => {
+        let score = 45;
+        if (candidate.type === property.type) score += 20;
+        if (Math.abs((candidate.beds || 0) - (property.beds || 0)) <= 1) score += 12;
+        if (String(candidate.location || '').toLowerCase().includes(cityToken)) score += 10;
+
+        const candidatePrice = parsePrice(candidate.price || '0');
+        if (propertyPriceValue > 0) {
+          const diffRatio = Math.abs(candidatePrice - propertyPriceValue) / propertyPriceValue;
+          if (diffRatio <= 0.15) score += 13;
+          else if (diffRatio <= 0.30) score += 8;
+        }
+
+        if (candidate.isFeatured) score += 5;
+
+        return { ...candidate, score: Math.min(score, 99) };
+      })
+      .sort((a, b) => b.score - a.score);
+  }, [filteredSimilarProperties, property.type, property.beds, propertyPriceValue, cityName]);
 
   const chartData = useMemo(() => {
     return (property.priceHistory || []).map(item => ({
@@ -430,6 +548,7 @@ export default function PropertyDetails() {
     const history = property.priceHistory || [];
     if (history.length < 2) return null;
     const first = history[0].value;
+    if (first <= 0) return null;
     const last = history[history.length - 1].value;
     const diff = last - first;
     const percentage = ((diff / first) * 100).toFixed(1);
@@ -459,7 +578,7 @@ export default function PropertyDetails() {
       },
     ];
     setLocalReviews(initialReviews);
-  }, [propertyId, property.reviews]);
+  }, [resolvedPropertyId, property.reviews]);
 
   const videoSource = useMemo(() => ({ uri: property.videoUrl }), [property.videoUrl]);
 
@@ -678,16 +797,21 @@ export default function PropertyDetails() {
   }, [expectedMonthlyRent, property.price]);
 
   const bankEMIs = useMemo(() => {
-    const principal = parsePrice(property.price) * (1 - (parseFloat(downPayment) || 20) / 100);
-    const years = parseFloat(loanTerm) || 20;
+    const dp = Math.max(0, Math.min(95, parseFloat(downPayment) || 20));
+    const principal = parsePrice(property.price) * (1 - dp / 100);
+    const years = Math.max(1, Math.min(40, parseFloat(loanTerm) || 20));
     
     return BANK_RATES.map(bank => {
       const monthlyRate = bank.rate / 100 / 12;
       const numberOfPayments = years * 12;
-      const emi = (principal * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) / (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
+      const denominator = Math.pow(1 + monthlyRate, numberOfPayments) - 1;
+      const emi =
+        denominator === 0
+          ? principal / numberOfPayments
+          : (principal * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) / denominator;
       return {
         ...bank,
-        emi: Math.round(emi).toLocaleString('en-IN')
+        emi: Number.isFinite(emi) ? Math.round(emi).toLocaleString('en-IN') : '0'
       };
     });
   }, [property.price, downPayment, loanTerm]);
@@ -716,6 +840,38 @@ export default function PropertyDetails() {
     };
   }, [property.price, property.sqft, property.avgPrice]);
 
+  const buyerSignals = useMemo(() => {
+    const signals: string[] = [];
+    const moveInReady =
+      String(property.status || '').toLowerCase().includes('ready') ||
+      String(property.possession || '').toLowerCase().includes('immediate');
+
+    if (trustScore >= 80) {
+      signals.push('High trust score with strong document verification.');
+    }
+    if (priceFairness?.isFair) {
+      signals.push(`Priced ${priceFairness.percent}% below the locality average.`);
+    }
+    if (parseFloat(rentalYieldPercent) >= 3.5) {
+      signals.push(`Estimated rental yield of ${rentalYieldPercent}% supports investor demand.`);
+    }
+    if (moveInReady) {
+      signals.push('Ready possession profile for faster move-in.');
+    }
+    if (!signals.length) {
+      signals.push('Balanced price-growth profile for long-term buyers.');
+    }
+
+    return signals.slice(0, 3);
+  }, [trustScore, priceFairness, rentalYieldPercent, property.status, property.possession]);
+
+  const resolveFeatureIcon = (icon: keyof typeof Ionicons.glyphMap | string) => {
+    if (typeof icon === 'string' && icon in Ionicons.glyphMap) {
+      return icon as keyof typeof Ionicons.glyphMap;
+    }
+    return 'checkmark-circle-outline';
+  };
+
   const handleAIChat = (input?: any) => {
     const message = typeof input === 'string' ? input : chatInput;
     if (!message.trim()) return;
@@ -738,9 +894,13 @@ export default function PropertyDetails() {
       } else if (lowInput.includes('investment') || lowInput.includes('worth')) {
         response = property.aiInsights?.summary || "It's a strong investment given the locality's appreciation trends.";
       } else if (lowInput.includes('price') || lowInput.includes('fair')) {
-        response = priceFairness?.isFair 
-          ? `The price is very fair. It's actually ₹${priceFairness.diff}/sqft (${priceFairness.percent}%) lower than the locality average.`
-          : `The price is about ${priceFairness?.percent}% above average, but this is justified by the premium builder and superior amenities.`;
+        if (!priceFairness) {
+          response = "I need more locality benchmark data for a precise fair-pricing recommendation.";
+        } else if (priceFairness.isFair) {
+          response = `The price is very fair. It's actually INR ${priceFairness.diff}/sqft (${priceFairness.percent}%) lower than the locality average.`;
+        } else {
+          response = `The price is about ${priceFairness.percent}% above average, but this is justified by the premium builder and superior amenities.`;
+        }
       }
       
       const aiMsg = { id: (Date.now() + 1).toString(), text: response, sender: 'ai' };
@@ -801,8 +961,10 @@ export default function PropertyDetails() {
     };
     
     setRecentSearches(prev => [newSearch, ...prev].slice(0, 5));
+    const matchingCount = getFilteredProperties(similarProperties).length;
+    setIsFiltersApplied(true);
     setIsSearchModalVisible(false);
-    Alert.alert("Filters Applied", "Searching for properties matching your criteria...");
+    Alert.alert("Filters Applied", `${matchingCount} matching properties found.`);
   };
 
   const loadRecentSearch = (search: any) => {
@@ -824,6 +986,7 @@ export default function PropertyDetails() {
     setFilterAmenities([]);
     setFilterReraOnly(true);
     setIsSearchSaved(false);
+    setIsFiltersApplied(false);
   };
 
   const handleTogglePriceDropAlert = () => {
@@ -861,7 +1024,7 @@ export default function PropertyDetails() {
   };
 
   const handleWhatsAppShare = () => {
-    const url = `https://estate-perks.vercel.app/property/${propertyId || '1'}`;
+    const url = `https://estate-perks.vercel.app/property/${resolvedPropertyId}`;
     const message = `Check out this property on Estate Perks!\n\n*Name:* ${property.name}\n*Price:* ${property.price}\n*Location:* ${property.location}\n\nView more details: ${url}`;
     const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
 
@@ -897,7 +1060,7 @@ export default function PropertyDetails() {
       message: `Check out this property: ${property.name}`,
       url:
         Platform.OS === 'web'
-          ? `https://estate-perks.vercel.app/property/${propertyId || '1'}`
+          ? `https://estate-perks.vercel.app/property/${resolvedPropertyId}`
           : undefined,
     });
   };
@@ -1174,7 +1337,11 @@ export default function PropertyDetails() {
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => {
-          if (navigationState?.key) router.back();
+          if (navigationState?.key) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
         }}
       >
         <Ionicons name="chevron-back" size={24} color="#fff" />
@@ -1463,9 +1630,9 @@ export default function PropertyDetails() {
           <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#f43f5e' }, hovered && styles.sectionCardHover]}>
             <Text style={styles.sectionTitle}>Key Features</Text>
             <View style={styles.featuresGrid}>
-            {property.features.map((f: PropertyFeature, i: number) => (
+            {(property.features || []).map((f: PropertyFeature, i: number) => (
               <View key={i} style={styles.featureItem}>
-                <Ionicons name={f.icon} size={16} color="#22d3ee" />
+                <Ionicons name={resolveFeatureIcon(f.icon)} size={16} color="#22d3ee" />
                 <Text style={styles.featureLabel}>{f.label}</Text>
               </View>
             ))}
@@ -1984,43 +2151,13 @@ export default function PropertyDetails() {
         </>
         )}
 
-        {activeTab === 'Builder' && (
-          <>
-        <Text style={styles.sectionTitle}>Listed By</Text>
-        <View style={styles.agentCard}>
-          <View style={styles.agentImageContainer}>
-            <Image source={{ uri: 'https://i.pravatar.cc/150?u=agent' }} style={styles.agentImage} />
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={14} color="#22d3ee" />
-            </View>
-          </View>
-          <View style={styles.agentInfo}>
-            <View style={styles.agentNameRow}>
-              <Text style={styles.agentName}>{property.builder}</Text>
-              <View style={styles.verifiedTextBadge}>
-                <Text style={styles.verifiedText}>Verified</Text>
-              </View>
-            </View>
-            <Text style={styles.agentTitle}>Official Developer Partner</Text>
-            <View style={styles.responseTimeRow}>
-              <Ionicons name="flash" size={12} color="#22d3ee" />
-              <Text style={styles.responseTimeText}>Responds in 2 hours • 98% Response Rate</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.contactButton} onPress={() => setIsCallbackVisible(true)}>
-            <Ionicons name="call" size={16} color="#22d3ee" />
-          </TouchableOpacity>
-        </View>
-        </>
-        )}
-
         {activeTab === 'Locality' && (
           <>
         <Text style={styles.sectionTitle}>Location</Text>
         <TouchableOpacity 
           style={styles.locationPreview}
           onPress={() => {
-            if (navigationState?.key) router.push('/explore');
+            router.push('/explore');
           }}
         >
           <Ionicons name="map" size={20} color="#22d3ee" />
@@ -2062,13 +2199,11 @@ export default function PropertyDetails() {
         {activeTab === 'Overview' && visitStatus === 'none' && (
           <TouchableOpacity
             onPress={() => {
-              if (navigationState?.key) {
-                router.push({
-                  pathname: '/schedule',
-                  params: { propertyName: property.name }
-                });
-                handleScheduleVisit();
-              }
+              router.push({
+                pathname: '/schedule',
+                params: { propertyName: property.name }
+              });
+              handleScheduleVisit();
             }}
           >
             <Animated.View
@@ -2083,41 +2218,105 @@ export default function PropertyDetails() {
         )}
 
         {activeTab === 'Overview' && (
-          <>
-        <Text style={styles.sectionTitle}>Similar Properties</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.similarScroll}
-        >
-          {similarProperties.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.similarCard}
-              onPress={() => {
-                if (navigationState?.key) {
-                  router.push(
-                    { pathname: '/property/[id]', params: { id: item.id } } as any
-                  );
-                }
-              }}
-            >
-              <Image
-                source={{ uri: item.image }}
-                style={styles.similarImage}
-              />
-              <View style={styles.similarInfo}>
-                <Text style={styles.similarName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={styles.similarPrice}>
-                  {item.price}
+          <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#14b8a6' }, hovered && styles.sectionCardHover]}>
+            <Text style={styles.sectionTitle}>Buyer Snapshot</Text>
+            <View style={styles.snapshotGrid}>
+              <View style={styles.snapshotItem}>
+                <Text style={styles.snapshotLabel}>Price / sqft</Text>
+                <Text style={styles.snapshotValue}>
+                  {propertyPricePerSqft ? `INR ${propertyPricePerSqft.toLocaleString('en-IN')}` : 'N/A'}
                 </Text>
               </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        </>
+              <View style={styles.snapshotItem}>
+                <Text style={styles.snapshotLabel}>{cityName} Avg / sqft</Text>
+                <Text style={styles.snapshotValue}>
+                  {localityAvgPricePerSqft ? `INR ${localityAvgPricePerSqft.toLocaleString('en-IN')}` : 'N/A'}
+                </Text>
+              </View>
+              <View style={styles.snapshotItem}>
+                <Text style={styles.snapshotLabel}>Rental Yield</Text>
+                <Text style={styles.snapshotValue}>{rentalYieldPercent}%</Text>
+              </View>
+              <View style={styles.snapshotItem}>
+                <Text style={styles.snapshotLabel}>Trust Rating</Text>
+                <Text style={styles.snapshotValue}>{trustScore}/100</Text>
+              </View>
+            </View>
+
+            <Text
+              style={[
+                styles.snapshotDelta,
+                localityPriceDelta?.isAbove ? styles.snapshotDeltaWarn : styles.snapshotDeltaGood
+              ]}
+            >
+              {localityPriceDelta
+                ? `${localityPriceDelta.isAbove ? 'Above' : 'Below'} locality average by ${localityPriceDelta.percent}%`
+                : 'Locality average comparison unavailable for this listing'}
+            </Text>
+
+            <View style={styles.signalList}>
+              {buyerSignals.map((signal, index) => (
+                <View key={`${signal}-${index}`} style={styles.signalItem}>
+                  <Ionicons name="checkmark-circle" size={14} color="#22c55e" />
+                  <Text style={styles.signalText}>{signal}</Text>
+                </View>
+              ))}
+            </View>
+          </Pressable>
+        )}
+
+        {activeTab === 'Overview' && (
+          <>
+            <Text style={styles.sectionTitle}>Recommended Properties</Text>
+            <Text style={styles.recommendationHint}>
+              {isFiltersApplied
+                ? `${recommendedProperties.length} homes match your active filters.`
+                : `Top matched homes similar to ${property.name}.`}
+            </Text>
+            {recommendedProperties.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.similarScroll}
+              >
+                {recommendedProperties.slice(0, 12).map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.similarCard}
+                    onPress={() => {
+                      router.push(
+                        { pathname: '/property/[id]', params: { id: item.id } } as any
+                      );
+                    }}
+                  >
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.similarImage}
+                    />
+                    <View style={styles.similarBadge}>
+                      <Text style={styles.similarBadgeText}>{item.score}% Match</Text>
+                    </View>
+                    <View style={styles.similarInfo}>
+                      <Text style={styles.similarName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.similarMeta} numberOfLines={1}>
+                        {item.location}
+                      </Text>
+                      <Text style={styles.similarPrice}>
+                        {item.price}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.noResultsCard}>
+                <Ionicons name="search-outline" size={18} color="#94a3b8" />
+                <Text style={styles.noResultsText}>No properties matched these filters. Try relaxing your search.</Text>
+              </View>
+            )}
+          </>
         )}
 
         {activeTab === 'Overview' && (
@@ -2389,7 +2588,7 @@ export default function PropertyDetails() {
                   </View>
                 </TouchableOpacity>
                 {Object.keys(PROPERTIES_DATA)
-                  .filter(id => id !== propertyId)
+                  .filter(id => id !== resolvedPropertyId)
                   .map(id => (
                     <TouchableOpacity 
                       key={id} 
@@ -3137,20 +3336,19 @@ export default function PropertyDetails() {
           </View>
         </View>
       </Modal>
+      {/* Footer Actions (non-sticky) */}
+      <View style={[styles.stickyFooter, isSmallMobile && styles.stickyFooterMobile]}>
+        <TouchableOpacity style={[styles.footerSecondaryBtn, isSmallMobile && styles.stickyFooterBtnMobile]} onPress={handleWhatsAppShare}>
+          <Ionicons name="logo-whatsapp" size={20} color="#22c55e" />
+          <Text style={styles.footerSecondaryText}>WhatsApp</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.footerPrimaryBtn, isSmallMobile && styles.stickyFooterBtnMobile]} onPress={() => setIsCallbackVisible(true)}>
+          <Ionicons name="call" size={20} color="#020617" />
+          <Text style={styles.footerPrimaryText}>Contact Seller</Text>
+        </TouchableOpacity>
+      </View>
       </Animated.View>
     </ParallaxScrollView>
-
-    {/* Sticky Footer - Square Yards Style */}
-    <View style={[styles.stickyFooter, isSmallMobile && styles.stickyFooterMobile]}>
-      <TouchableOpacity style={[styles.footerSecondaryBtn, isSmallMobile && styles.stickyFooterBtnMobile]} onPress={handleWhatsAppShare}>
-        <Ionicons name="logo-whatsapp" size={20} color="#22c55e" />
-        <Text style={styles.footerSecondaryText}>WhatsApp</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.footerPrimaryBtn, isSmallMobile && styles.stickyFooterBtnMobile]} onPress={() => setIsCallbackVisible(true)}>
-        <Ionicons name="call" size={20} color="#020617" />
-        <Text style={styles.footerPrimaryText}>Contact Seller</Text>
-      </TouchableOpacity>
-    </View>
     </View>
   );
 }

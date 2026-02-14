@@ -20,15 +20,20 @@ const INITIAL_POINTS = 2000;
 
 export default function PerksScreen() {
   const router = useRouter();
-  const { visits } = useVisit();
+  const { visits } = useVisit() as { visits?: unknown[] };
 
+  const visitCount = useMemo(() => (Array.isArray(visits) ? visits.length : 0), [visits]);
   // Calculate dynamic points: 500 per visit + 2000 base points
-  const points = useMemo(() => (visits?.length || 0) * POINTS_PER_VISIT + INITIAL_POINTS, [visits]);
+  const points = useMemo(() => visitCount * POINTS_PER_VISIT + INITIAL_POINTS, [visitCount]);
 
   const handleRedeem = (reward: string) => {
     if (points < REDEEM_COST) {
       const errorMsg = `You need ${REDEEM_COST - points} more points to redeem "${reward}".`;
-      Platform.OS === 'web' ? window.alert(errorMsg) : Alert.alert("Insufficient Points", errorMsg);
+      if (Platform.OS === 'web') {
+        window.alert(errorMsg);
+      } else {
+        Alert.alert("Insufficient Points", errorMsg);
+      }
       return;
     }
 
