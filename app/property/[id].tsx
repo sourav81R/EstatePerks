@@ -173,6 +173,38 @@ const FAVORITES_STORAGE_KEY = 'estateperks:favorites:v1';
 const RECENT_VIEWS_STORAGE_KEY = 'estateperks:recentViews:v1';
 const CALLBACK_LEADS_STORAGE_KEY = 'estateperks:callbackLeads:v1';
 const RECENT_VIEW_LIMIT = 8;
+const DEFAULT_VIDEO_PLACEHOLDER =
+  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4';
+const RELIABLE_VIDEO_FALLBACKS = [
+  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
+  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
+  'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+];
+
+// Replace these with real property walkthrough clips from your backend when available.
+const PROPERTY_VIDEO_URLS: Record<string, string> = {
+  '1': 'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4',
+  '2': 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+  '3': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+  '4': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
+  '5': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
+  '6': 'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
+  '7': 'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+  '8': 'https://samplelib.com/lib/preview/mp4/sample-15s.mp4',
+  '9': 'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
+  '10': 'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+  '11': 'https://samplelib.com/lib/preview/mp4/sample-15s.mp4',
+  '12': 'https://samplelib.com/lib/preview/mp4/sample-20s.mp4',
+  '13': 'https://samplelib.com/lib/preview/mp4/sample-30s.mp4',
+  '14': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+  '15': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
+  '16': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
+  '17': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+  '18': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
+  '19': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
+  '20': 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+};
 
 /* ---------------- SCREEN ---------------- */
 
@@ -217,10 +249,11 @@ export default function PropertyDetails() {
   const [recentViewIds, setRecentViewIds] = useState<string[]>([]);
   const [isFeatured, setIsFeatured] = useState(!!property.isFeatured || resolvedPropertyId === '1');
   const [isPriceDropAlertActive, setIsPriceDropAlertActive] = useState(false);
-  const [isMuted, setIsMuted] = useState(true); // Default to true for web autoplay
+  const [isMuted, setIsMuted] = useState(Platform.OS === 'web'); // keep muted by default on web autoplay
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [progressBarWidth, setProgressBarWidth] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [showControls, setShowControls] = useState(true);
   const [doubleTapSide, setDoubleTapSide] = useState<'left' | 'right' | null>(null);
@@ -477,6 +510,7 @@ export default function PropertyDetails() {
   }, [favoritePropertyIds, resolvedPropertyId]);
 
   const lastTapRef = useRef<{ time: number; side: 'left' | 'right' | null }>({ time: 0, side: null });
+  const videoViewRef = useRef<VideoView | null>(null);
 
   const similarProperties = useMemo<PropertyListItem[]>(() =>
     Object.keys(PROPERTIES_DATA)
@@ -654,11 +688,38 @@ export default function PropertyDetails() {
     setLocalReviews(initialReviews);
   }, [resolvedPropertyId, property.reviews]);
 
-  const videoSource = useMemo(() => ({ uri: property.videoUrl }), [property.videoUrl]);
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+
+  const videoCandidates = useMemo(() => {
+    const mappedVideo = PROPERTY_VIDEO_URLS[resolvedPropertyId];
+    const propertyVideo =
+      property.videoUrl && property.videoUrl !== DEFAULT_VIDEO_PLACEHOLDER ? property.videoUrl : undefined;
+
+    return Array.from(
+      new Set(
+        [mappedVideo, propertyVideo, ...RELIABLE_VIDEO_FALLBACKS, DEFAULT_VIDEO_PLACEHOLDER].filter(
+          (url): url is string => typeof url === 'string' && url.length > 0
+        )
+      )
+    );
+  }, [resolvedPropertyId, property.videoUrl]);
+
+  const resolvedVideoUrl = videoCandidates[activeVideoIndex] || DEFAULT_VIDEO_PLACEHOLDER;
+  const canTryNextVideo = activeVideoIndex < videoCandidates.length - 1;
+
+  const moveToNextVideoSource = () => {
+    if (!canTryNextVideo) return false;
+    setActiveVideoIndex((prev) => Math.min(prev + 1, videoCandidates.length - 1));
+    setHasError(false);
+    setIsBuffering(true);
+    return true;
+  };
+
+  const videoSource = useMemo(() => ({ uri: resolvedVideoUrl }), [resolvedVideoUrl]);
 
   const player = useVideoPlayer(videoSource, (p) => {
     p.loop = true;
-    p.muted = true; // Start muted for browser compatibility
+    p.muted = Platform.OS === 'web';
     p.volume = 1.0;
     p.playbackRate = playbackSpeed;
   });
@@ -667,6 +728,12 @@ export default function PropertyDetails() {
   const [hasError, setHasError] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    setActiveVideoIndex(0);
+    setHasError(false);
+    setIsBuffering(false);
+  }, [resolvedPropertyId, property.videoUrl]);
 
   const resetControlsTimer = () => {
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
@@ -679,6 +746,7 @@ export default function PropertyDetails() {
   };
 
   const formatTime = (seconds: number) => {
+    if (!isFinite(seconds) || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -696,7 +764,13 @@ export default function PropertyDetails() {
   useEffect(() => {
     // Sync initial state
     setIsBuffering(player.status === 'loading');
-    setHasError(player.status === 'error');
+    if (player.status === 'error') {
+      if (!moveToNextVideoSource()) {
+        setHasError(true);
+      }
+    } else {
+      setHasError(false);
+    }
     setIsPlaying(player.playing);
 
     const interval = setInterval(() => {
@@ -707,7 +781,13 @@ export default function PropertyDetails() {
 
     const statusSub = player.addListener('statusChange', (payload: any) => {
       setIsBuffering(payload.status === 'loading');
-      setHasError(payload.status === 'error');
+      if (payload.status === 'error') {
+        if (!moveToNextVideoSource()) {
+          setHasError(true);
+        }
+      } else {
+        setHasError(false);
+      }
     });
     const playingSub = player.addListener('playingChange', (payload: any) => {
       setIsPlaying(payload.isPlaying);
@@ -717,7 +797,7 @@ export default function PropertyDetails() {
       statusSub.remove();
       playingSub.remove();
     };
-  }, [player]);
+  }, [player, activeVideoIndex, videoCandidates.length]);
 
   const togglePlay = () => {
     if (isPlaying) {
@@ -779,6 +859,19 @@ export default function PropertyDetails() {
     resetControlsTimer();
   };
 
+  const toggleFullscreen = async () => {
+    try {
+      if (isFullscreen) {
+        await videoViewRef.current?.exitFullscreen();
+      } else {
+        await videoViewRef.current?.enterFullscreen();
+      }
+    } catch (error) {
+      console.warn('Fullscreen toggle failed', error);
+    }
+    resetControlsTimer();
+  };
+
   // YouTube-style Swipe Gestures
   const panResponder = useMemo(
     () =>
@@ -801,6 +894,21 @@ export default function PropertyDetails() {
   useEffect(() => {
     player.muted = isMuted;
   }, [isMuted, player]);
+
+  useEffect(() => {
+    if (viewMode !== 'video' && isFullscreen) {
+      videoViewRef.current?.exitFullscreen().catch(() => {
+        // Ignore exit failures when leaving video mode.
+      });
+    }
+  }, [viewMode, isFullscreen]);
+
+  useEffect(() => {
+    setIsMuted(Platform.OS === 'web');
+    setPlaybackSpeed(1);
+    setProgress(0);
+    setIsFullscreen(false);
+  }, [resolvedPropertyId]);
 
   useEffect(() => {
     if (viewMode === 'video') {
@@ -1383,12 +1491,20 @@ export default function PropertyDetails() {
             </View>
           )}
           <VideoView
-            key={property.videoUrl}
+            key={resolvedVideoUrl}
+            ref={videoViewRef}
             player={player}
             contentFit="cover"
             nativeControls={false}
             allowsFullscreen
+            fullscreenOptions={{
+              enable: true,
+              orientation: isMobile ? 'landscape' : 'default',
+              autoExitOnRotate: true,
+            }}
             allowsPictureInPicture
+            onFullscreenEnter={() => setIsFullscreen(true)}
+            onFullscreenExit={() => setIsFullscreen(false)}
             style={StyleSheet.absoluteFill}
           />
           {/* Double Tap Zones */}
@@ -1430,13 +1546,16 @@ export default function PropertyDetails() {
           {!isBuffering && !hasError && showControls && (
             <Animated.View entering={FadeInUp} exiting={FadeOut} style={styles.centralControlContainer} pointerEvents="box-none">
               <TouchableOpacity 
-                style={styles.centralControlButton} 
+                style={[
+                  styles.centralControlButton,
+                  isSmallMobile && { width: 68, height: 68, borderRadius: 34 },
+                ]} 
                 onPress={togglePlay}
                 activeOpacity={0.8}
               >
                 <Ionicons 
                   name={isPlaying ? "pause" : "play"} 
-                  size={32} 
+                  size={isSmallMobile ? 28 : 32} 
                   color="#fff" 
                 />
               </TouchableOpacity>
@@ -1454,55 +1573,110 @@ export default function PropertyDetails() {
               <Text style={styles.videoErrorText}>Failed to load virtual tour</Text>
               <TouchableOpacity 
                 style={styles.retryButton} 
-                onPress={() => player.play()}
+                onPress={() => {
+                  if (!moveToNextVideoSource()) {
+                    player.play();
+                  }
+                }}
               >
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
           )}
           {showControls && (
-            <Animated.View entering={FadeInDown} exiting={FadeOut} style={styles.videoControlsOverlay}>
+            <Animated.View
+              entering={FadeInDown}
+              exiting={FadeOut}
+              style={[
+                styles.videoControlsOverlay,
+                {
+                  right: isSmallMobile ? 12 : isMobile ? 14 : 20,
+                  bottom: isSmallMobile ? 112 : isMobile ? 108 : 110,
+                },
+              ]}
+            >
             <TouchableOpacity 
-              style={styles.controlButton} 
+              style={[
+                styles.controlButton,
+                {
+                  padding: isSmallMobile ? 9 : isMobile ? 10 : 12,
+                  borderRadius: isSmallMobile ? 16 : 20,
+                },
+              ]} 
               onPress={skipBackward}
             >
-              <Ionicons name="refresh-outline" size={18} color="#fff" style={{ transform: [{ scaleX: -1 }] }} />
+              <Ionicons
+                name="refresh-outline"
+                size={isSmallMobile ? 16 : 18}
+                color="#fff"
+                style={{ transform: [{ scaleX: -1 }] }}
+              />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.controlButton} 
+              style={[
+                styles.controlButton,
+                {
+                  padding: isSmallMobile ? 9 : isMobile ? 10 : 12,
+                  borderRadius: isSmallMobile ? 16 : 20,
+                },
+              ]} 
               onPress={togglePlay}
             >
               <Ionicons 
                 name={isPlaying ? "pause" : "play"} 
-                size={18} 
+                size={isSmallMobile ? 16 : 18} 
                 color="#fff" 
               />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.controlButton} 
+              style={[
+                styles.controlButton,
+                {
+                  padding: isSmallMobile ? 9 : isMobile ? 10 : 12,
+                  borderRadius: isSmallMobile ? 16 : 20,
+                },
+              ]} 
               onPress={skipForward}
             >
-              <Ionicons name="refresh-outline" size={18} color="#fff" />
+              <Ionicons name="refresh-outline" size={isSmallMobile ? 16 : 18} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.controlButton} 
+              style={[
+                styles.controlButton,
+                {
+                  padding: isSmallMobile ? 9 : isMobile ? 10 : 12,
+                  borderRadius: isSmallMobile ? 16 : 20,
+                },
+              ]} 
               onPress={togglePlaybackSpeed}
             >
               <Text style={styles.speedText}>{playbackSpeed}x</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.controlButton} 
-              onPress={resetControlsTimer}
+              style={[
+                styles.controlButton,
+                {
+                  padding: isSmallMobile ? 9 : isMobile ? 10 : 12,
+                  borderRadius: isSmallMobile ? 16 : 20,
+                },
+              ]} 
+              onPress={toggleFullscreen}
             >
-              <Ionicons name="expand" size={18} color="#fff" />
+              <Ionicons name={isFullscreen ? 'contract' : 'expand'} size={isSmallMobile ? 16 : 18} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.controlButton} 
+              style={[
+                styles.controlButton,
+                {
+                  padding: isSmallMobile ? 9 : isMobile ? 10 : 12,
+                  borderRadius: isSmallMobile ? 16 : 20,
+                },
+              ]} 
               onPress={toggleMute}
             >
               <Ionicons 
                 name={isMuted ? "volume-mute" : "volume-high"} 
-                size={18} 
+                size={isSmallMobile ? 16 : 18} 
                 color="#fff" 
               />
             </TouchableOpacity>
@@ -1510,12 +1684,34 @@ export default function PropertyDetails() {
           )}
 
           {showControls && (
-            <Animated.View entering={FadeInDown} exiting={FadeOut} style={styles.bottomControlsWrapper}>
-              <Text style={styles.timeText}>
+            <Animated.View
+              entering={FadeInDown}
+              exiting={FadeOut}
+              style={[
+                styles.bottomControlsWrapper,
+                {
+                  left: isSmallMobile ? 12 : isMobile ? 14 : 20,
+                  right: isSmallMobile ? 12 : isMobile ? 14 : 20,
+                  bottom: isSmallMobile ? 84 : 85,
+                },
+              ]}
+            >
+              <Text style={[styles.timeText, { fontSize: isSmallMobile ? 11 : 12 }]}>
                 {formatTime(player.currentTime)} / {formatTime(player.duration)}
               </Text>
               <TouchableOpacity 
-            style={styles.progressBarContainer}
+            style={[
+              styles.progressBarContainer,
+              {
+                position: 'relative',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                flex: 1,
+                marginLeft: isSmallMobile ? 8 : 10,
+                height: isSmallMobile ? 5 : 4,
+              },
+            ]}
             activeOpacity={1}
             onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
             onPress={(e) => {
