@@ -5,11 +5,11 @@ import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { PROPERTIES_DATA } from '../constants/propertiesData';
 
-const INITIAL_REGION = {
-  latitude: 34.0522,
-  longitude: -118.2437,
-  latitudeDelta: 0.0922,
-  longitudeDelta: 0.0421,
+const INDIA_FALLBACK_REGION = {
+  latitude: 20.5937,
+  longitude: 78.9629,
+  latitudeDelta: 10.5,
+  longitudeDelta: 10.5,
 };
 
 interface PropertyMapProps {
@@ -18,53 +18,121 @@ interface PropertyMapProps {
   showHeatmap?: boolean;
 }
 
-export default function PropertyMap({ latitude, longitude }: PropertyMapProps) {
+function parsePriceValue(price: string): number {
+  const normalized = price.replace(/,/g, '').toLowerCase();
+  const amountMatch = normalized.match(/([\d.]+)/);
+  if (!amountMatch) return 0;
+
+  const amount = Number(amountMatch[1]);
+  if (!Number.isFinite(amount)) return 0;
+
+  if (normalized.includes('cr')) return amount * 10_000_000;
+  if (normalized.includes('lac') || normalized.includes('lakh')) return amount * 100_000;
+  if (normalized.includes('k')) return amount * 1_000;
+  return amount;
+}
+
+function getHeatmapColor(value: number, min: number, max: number): string {
+  if (!Number.isFinite(value)) return '#22d3ee';
+  if (max <= min) return '#f59e0b';
+
+  const ratio = (value - min) / (max - min);
+  if (ratio < 0.33) return '#22c55e';
+  if (ratio < 0.66) return '#f59e0b';
+  return '#ef4444';
+}
+
+export default function PropertyMap({ latitude, longitude, showHeatmap = false }: PropertyMapProps) {
   const router = useRouter();
 
-  const properties = React.useMemo(() => 
-    Object.entries(PROPERTIES_DATA).map(([id, data]) => ({
-      id,
-      ...data,
-    })).filter(p => p.coordinates),
-  []);
+  const properties = React.useMemo(
+    () =>
+      Object.entries(PROPERTIES_DATA)
+        .map(([id, data]) => ({
+          id,
+          ...data,
+          priceValue: parsePriceValue(String(data?.price || '')),
+        }))
+        .filter(
+          (property) =>
+            Number.isFinite(property?.coordinates?.latitude) &&
+            Number.isFinite(property?.coordinates?.longitude)
+        ),
+    []
+  );
 
-  const region = React.useMemo(() => (
-    latitude && longitude 
-      ? { ...INITIAL_REGION, latitude, longitude }
-      : INITIAL_REGION
-  ), [latitude, longitude]);
+  const region = React.useMemo(() => {
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return {
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        latitudeDelta: 0.25,
+        longitudeDelta: 0.25,
+      };
+    }
+
+    if (!properties.length) {
+      return INDIA_FALLBACK_REGION;
+    }
+
+    const lats = properties.map((property) => property.coordinates.latitude);
+    const lngs = properties.map((property) => property.coordinates.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.6, 0.4),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.6, 0.4),
+    };
+  }, [latitude, longitude, properties]);
+
+  const priceRange = React.useMemo(() => {
+    if (!properties.length) return { min: 0, max: 0 };
+    const values = properties
+      .map((property) => Number(property.priceValue))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (!values.length) return { min: 0, max: 0 };
+    return {
+      min: Math.min(...values),
+      max: Math.max(...values),
+    };
+  }, [properties]);
 
   return (
     <View style={styles.container}>
       <MapView
         style={styles.map}
         initialRegion={region}
-        region={region}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         showsUserLocation
       >
         {properties.map((property) => (
-          <Marker 
-            key={property.id} 
-            coordinate={property.coordinates!}
-            onCalloutPress={() => 
-              router.push(`/property/${property.id}`)
-            }
+          <Marker
+            key={property.id}
+            coordinate={property.coordinates}
+            onCalloutPress={() => router.push(`/property/${property.id}`)}
             tracksViewChanges={false}
           >
-            <View style={styles.priceTag}>
+            <View
+              style={[
+                styles.priceTag,
+                showHeatmap
+                  ? { backgroundColor: getHeatmapColor(property.priceValue, priceRange.min, priceRange.max) }
+                  : null,
+              ]}
+            >
               <Text style={styles.priceText}>{property.price}</Text>
             </View>
             <Callout tooltip>
               <View style={styles.calloutWrapper}>
-                <Image 
-                  source={{ uri: property.image }} 
-                  style={styles.calloutImage} 
-                  contentFit="cover"
-                />
+                <Image source={{ uri: property.image }} style={styles.calloutImage} contentFit="cover" />
                 <Text style={styles.calloutTitle}>{property.name}</Text>
                 <Text style={styles.calloutPrice}>{property.price}</Text>
-                <Text style={styles.calloutSubtitle}>View Details →</Text>
+                <Text style={styles.calloutSubtitle}>{'View Details ->'}</Text>
               </View>
             </Callout>
           </Marker>
