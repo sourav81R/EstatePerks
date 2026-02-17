@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Platform, ScrollView, useWindowDimensions, KeyboardAvoidingView, Pressable, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Platform, ScrollView, useWindowDimensions, KeyboardAvoidingView, Pressable, Modal, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
@@ -57,6 +57,8 @@ const PLATFORM_HIGHLIGHTS = [
 const SAVED_PROPERTIES_STORAGE_KEY = 'estateperks:savedProperties:v1';
 const MAX_COMPARE_PROPERTIES = 3;
 const AI_ASSISTANT_ENDPOINT = process.env.EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT;
+const APP_STORE_URL = process.env.EXPO_PUBLIC_APPLE_APP_STORE_URL || 'https://apps.apple.com/';
+const GOOGLE_PLAY_URL = process.env.EXPO_PUBLIC_GOOGLE_PLAY_STORE_URL || 'https://play.google.com/store/apps';
 
 type ChatSender = 'ai' | 'user';
 
@@ -139,6 +141,12 @@ export default function HomeScreen() {
   const [isCareersModalVisible, setIsCareersModalVisible] = useState(false);
   const [isPrivacyModalVisible, setIsPrivacyModalVisible] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
+
+  const handleOpenExternalLink = useCallback((url: string) => {
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Unable to open link', 'Please try again later.');
+    });
+  }, []);
   const [isSubscribed, setIsSubscribed] = useState(false);
 
   const handleSubscribe = () => {
@@ -1157,6 +1165,7 @@ export default function HomeScreen() {
               <View style={[styles.footerColumn, isMobile ? styles.footerColumnMobile : { width: isLargeScreen ? '23%' : '48%' }]}>
                 <Text style={styles.footerSectionTitle}>Download App</Text>
                 <Pressable
+                  onPress={() => handleOpenExternalLink(APP_STORE_URL)}
                   style={({ hovered }) => [styles.downloadBadge, hovered && Platform.OS === 'web' && styles.downloadBadgeHover]}
                 >
                   {({ hovered }) => (
@@ -1170,6 +1179,7 @@ export default function HomeScreen() {
                   )}
                 </Pressable>
                 <Pressable
+                  onPress={() => handleOpenExternalLink(GOOGLE_PLAY_URL)}
                   style={({ hovered }) => [styles.downloadBadge, { marginTop: 10 }, hovered && Platform.OS === 'web' && styles.downloadBadgeHover]}
                 >
                   {({ hovered }) => (
@@ -1186,9 +1196,17 @@ export default function HomeScreen() {
             </View>
 
             <View style={[styles.socialRow, isCompactMobile && styles.socialRowCompact]}>
-              {['logo-facebook', 'logo-twitter', 'logo-instagram', 'logo-linkedin'].map((icon) => (
+              {[
+                { icon: 'logo-facebook', url: '' },
+                { icon: 'logo-twitter', url: '' },
+                { icon: 'logo-instagram', url: '' },
+                { icon: 'logo-linkedin', url: 'https://linkedin.com/in/souravchowdhury-2003r' },
+                { icon: 'logo-github', url: 'https://github.com/sourav81R' },
+                { icon: 'globe-outline', url: 'https://portfolio-topaz-eight-91.vercel.app' },
+              ].map(({ icon, url }) => (
                 <Pressable
                   key={icon}
+                  onPress={url ? () => handleOpenExternalLink(url) : undefined}
                   style={({ hovered }) => [
                     styles.socialIcon,
                     hovered && Platform.OS === 'web' && styles.socialIconHover
