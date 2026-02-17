@@ -59,6 +59,8 @@ const MAX_COMPARE_PROPERTIES = 3;
 const AI_ASSISTANT_ENDPOINT = process.env.EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT;
 const APP_STORE_URL = process.env.EXPO_PUBLIC_APPLE_APP_STORE_URL || 'https://apps.apple.com/';
 const GOOGLE_PLAY_URL = process.env.EXPO_PUBLIC_GOOGLE_PLAY_STORE_URL || 'https://play.google.com/store/apps';
+const NEWSLETTER_SUBSCRIBE_ENDPOINT = process.env.EXPO_PUBLIC_NEWSLETTER_SUBSCRIBE_ENDPOINT
+  || (AI_ASSISTANT_ENDPOINT ? AI_ASSISTANT_ENDPOINT.replace('/api/ai-assistant', '/api/newsletter/subscribe') : '');
 
 type ChatSender = 'ai' | 'user';
 
@@ -148,16 +150,49 @@ export default function HomeScreen() {
     });
   }, []);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
 
-  const handleSubscribe = () => {
-    if (!newsletterEmail.trim() || !newsletterEmail.includes('@')) {
+  const handleSubscribe = useCallback(async () => {
+    const email = newsletterEmail.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email)) {
       Alert.alert("Invalid Email", "Please enter a valid email address.");
       return;
     }
-    setIsSubscribed(true);
-    setNewsletterEmail('');
-    setTimeout(() => setIsSubscribed(false), 5000);
-  };
+
+    if (!NEWSLETTER_SUBSCRIBE_ENDPOINT) {
+      Alert.alert('Configuration Missing', 'Newsletter endpoint is not configured.');
+      return;
+    }
+
+    if (isSubscribing) return;
+
+    setIsSubscribing(true);
+    try {
+      const res = await fetch(NEWSLETTER_SUBSCRIBE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to subscribe right now. Please try again.');
+      }
+
+      setIsSubscribed(true);
+      setNewsletterEmail('');
+      Alert.alert('Subscription Successful', `A confirmation email has been sent to ${email}.`);
+      setTimeout(() => setIsSubscribed(false), 5000);
+    } catch (error) {
+      Alert.alert(
+        'Subscription Failed',
+        error instanceof Error ? error.message : 'Unable to subscribe right now. Please try again.'
+      );
+    } finally {
+      setIsSubscribing(false);
+    }
+  }, [newsletterEmail, isSubscribing]);
 
   const [isTermsModalVisible, setIsTermsModalVisible] = useState(false);
   const chatScrollRef = useRef<ScrollView>(null);
@@ -1072,8 +1107,16 @@ export default function HomeScreen() {
                       autoCapitalize="none"
                       keyboardType="email-address"
                     />
-                    <TouchableOpacity style={[styles.newsletterBtn, isCompactMobile && styles.newsletterBtnCompact]} onPress={handleSubscribe}>
-                      <Text style={styles.newsletterBtnText}>Subscribe</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.newsletterBtn,
+                        isCompactMobile && styles.newsletterBtnCompact,
+                        isSubscribing && styles.newsletterBtnDisabled
+                      ]}
+                      onPress={handleSubscribe}
+                      disabled={isSubscribing}
+                    >
+                      <Text style={styles.newsletterBtnText}>{isSubscribing ? 'Subscribing...' : 'Subscribe'}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2408,6 +2451,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  newsletterBtnDisabled: {
+    opacity: 0.7,
   },
   newsletterBtnCompact: {
     width: '100%',

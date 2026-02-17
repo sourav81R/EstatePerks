@@ -16,9 +16,13 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
-3. Enable real AI Property Assistant
+3. Enable local backend (AI + newsletter emails)
 
-   1. Open `.env` and set `OPENAI_API_KEY`.
+   1. Open `.env` and set:
+      - `OPENAI_API_KEY`
+      - `RESEND_API_KEY`
+      - `NEWSLETTER_FROM_EMAIL` (use a verified sender in Resend for production)
+
    2. Start AI server:
 
    ```bash
@@ -33,6 +37,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
    Notes:
    - Desktop/web can use `EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT=http://127.0.0.1:8787/api/ai-assistant`
+   - Desktop/web can use `EXPO_PUBLIC_NEWSLETTER_SUBSCRIBE_ENDPOINT=http://127.0.0.1:8787/api/newsletter/subscribe`
    - Physical mobile device should use your computer LAN IP instead of `127.0.0.1`
 
 In the output, you'll find options to open the app in a

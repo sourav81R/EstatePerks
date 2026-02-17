@@ -30,13 +30,18 @@ const PORT = Number(process.env.AI_ASSISTANT_PORT || 8787);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_API_BASE = (process.env.OPENAI_API_BASE || 'https://api.openai.com/v1').replace(/\/$/, '');
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_API_BASE = (process.env.RESEND_API_BASE || 'https://api.resend.com').replace(/\/$/, '');
+const NEWSLETTER_FROM_EMAIL = process.env.NEWSLETTER_FROM_EMAIL || 'onboarding@resend.dev';
+const NEWSLETTER_FROM_NAME = process.env.NEWSLETTER_FROM_NAME || 'EstatePerks';
+const NEWSLETTER_SUBJECT = process.env.NEWSLETTER_SUBJECT || 'You are subscribed to EstatePerks updates';
 
 function writeJson(res, statusCode, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   });
   res.end(body);
@@ -68,6 +73,47 @@ function compactJson(value) {
     return JSON.stringify(value ?? {}, null, 2);
   } catch {
     return '{}';
+  }
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+async function sendNewsletterWelcomeEmail(email) {
+  if (!RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY is missing in .env');
+  }
+
+  const from = NEWSLETTER_FROM_NAME
+    ? `${NEWSLETTER_FROM_NAME} <${NEWSLETTER_FROM_EMAIL}>`
+    : NEWSLETTER_FROM_EMAIL;
+
+  const response = await fetch(`${RESEND_API_BASE}/emails`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from,
+      to: [email],
+      subject: NEWSLETTER_SUBJECT,
+      html: [
+        '<div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a;">',
+        '<h2 style="margin:0 0 12px;">Welcome to EstatePerks</h2>',
+        '<p style="margin:0 0 8px;">Your email subscription is now active.</p>',
+        '<p style="margin:0;">You will receive the latest property alerts and updates.</p>',
+        '</div>',
+      ].join(''),
+      text: 'Welcome to EstatePerks. Your email subscription is now active. You will receive the latest property alerts and updates.',
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.message || data?.error?.message || `Email provider error ${response.status}`;
+    throw new Error(message);
   }
 }
 
@@ -178,7 +224,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     });
     res.end();
@@ -203,13 +249,36 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/api/newsletter/subscribe') {
+    try {
+      const body = await readJsonBody(req);
+      const email = String(body?.email || '').trim().toLowerCase();
+      if (!isValidEmail(email)) {
+        writeJson(res, 400, { error: 'Please provide a valid email address.' });
+        return;
+      }
+
+      await sendNewsletterWelcomeEmail(email);
+      writeJson(res, 200, { ok: true, message: 'Subscription email sent.' });
+    } catch (error) {
+      writeJson(res, 500, {
+        error: error instanceof Error ? error.message : 'Unknown server error',
+      });
+    }
+    return;
+  }
+
   writeJson(res, 404, { error: 'Not Found' });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[ai-server] Listening on http://0.0.0.0:${PORT}`);
   console.log(`[ai-server] Endpoint: POST /api/ai-assistant`);
+  console.log(`[ai-server] Endpoint: POST /api/newsletter/subscribe`);
   if (!OPENAI_API_KEY) {
     console.log('[ai-server] OPENAI_API_KEY is missing. Add it in .env');
+  }
+  if (!RESEND_API_KEY) {
+    console.log('[ai-server] RESEND_API_KEY is missing. Newsletter emails are disabled.');
   }
 });
