@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import { VisitProvider } from '../context/VisitContext';
 import TopNavbar from '../components/TopNavbar';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 function AppLayout() {
   const { user, authLoading } = useAuth();
@@ -27,6 +28,12 @@ function AppLayout() {
       router.replace('/');
     }
   }, [user, isAuthRoute, navigationState?.key, router, authLoading]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.title = 'EstatePerks';
+    }
+  }, [segments]);
 
   return (
     <Stack
