@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing';
 import { LineChart } from 'react-native-gifted-charts';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gyroscope } from 'expo-sensors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   View,
@@ -168,6 +169,11 @@ import {
 
 import { PROPERTIES_DATA } from '../../constants/propertiesData';
 
+const FAVORITES_STORAGE_KEY = 'estateperks:favorites:v1';
+const RECENT_VIEWS_STORAGE_KEY = 'estateperks:recentViews:v1';
+const CALLBACK_LEADS_STORAGE_KEY = 'estateperks:callbackLeads:v1';
+const RECENT_VIEW_LIMIT = 8;
+
 /* ---------------- SCREEN ---------------- */
 
 export default function PropertyDetails() {
@@ -207,6 +213,8 @@ export default function PropertyDetails() {
 
   const [viewMode, setViewMode] = useState<'image' | '3d' | 'video'>('image');
   const [isFavorited, setIsFavorited] = useState(false);
+  const [favoritePropertyIds, setFavoritePropertyIds] = useState<string[]>([]);
+  const [recentViewIds, setRecentViewIds] = useState<string[]>([]);
   const [isFeatured, setIsFeatured] = useState(!!property.isFeatured || resolvedPropertyId === '1');
   const [isPriceDropAlertActive, setIsPriceDropAlertActive] = useState(false);
   const [isMuted, setIsMuted] = useState(true); // Default to true for web autoplay
@@ -362,6 +370,8 @@ export default function PropertyDetails() {
   const [callbackPhone, setCallbackPhone] = useState('');
   const [callbackEmail, setCallbackEmail] = useState('');
   const [callbackMessage, setCallbackMessage] = useState('');
+  const [preferredContactSlot, setPreferredContactSlot] = useState('Evening');
+  const [buyingTimeline, setBuyingTimeline] = useState('Within 3 months');
 
   // Locality Comparison State
   const [isLocalityCompareVisible, setIsLocalityCompareVisible] = useState(false);
@@ -401,14 +411,70 @@ export default function PropertyDetails() {
   const [isFiltersApplied, setIsFiltersApplied] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadPersistedState = async () => {
+      try {
+        const [favoritesRaw, recentRaw] = await Promise.all([
+          AsyncStorage.getItem(FAVORITES_STORAGE_KEY),
+          AsyncStorage.getItem(RECENT_VIEWS_STORAGE_KEY),
+        ]);
+
+        if (!isMounted) return;
+
+        if (favoritesRaw) {
+          const parsed = JSON.parse(favoritesRaw);
+          if (Array.isArray(parsed)) {
+            setFavoritePropertyIds(parsed.filter((id): id is string => typeof id === 'string'));
+          }
+        }
+
+        if (recentRaw) {
+          const parsed = JSON.parse(recentRaw);
+          if (Array.isArray(parsed)) {
+            setRecentViewIds(parsed.filter((id): id is string => typeof id === 'string'));
+          }
+        }
+      } catch {
+        // Ignore transient persistence failures and continue.
+      }
+    };
+
+    loadPersistedState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoritePropertyIds)).catch(() => {
+      // Ignore transient persistence failures and continue.
+    });
+  }, [favoritePropertyIds]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(RECENT_VIEWS_STORAGE_KEY, JSON.stringify(recentViewIds)).catch(() => {
+      // Ignore transient persistence failures and continue.
+    });
+  }, [recentViewIds]);
+
+  useEffect(() => {
     setIsFeatured(!!property.isFeatured || resolvedPropertyId === '1');
-    setIsFavorited(false);
     setIsPriceDropAlertActive(false);
     setIsFiltersApplied(false);
     setChatMessages([
       { id: '1', text: `Hi! I'm your AI assistant for ${property.name}. How can I help you today?`, sender: 'ai' }
     ]);
+    setRecentViewIds((prev) => {
+      const next = [resolvedPropertyId, ...prev.filter((id) => id !== resolvedPropertyId)];
+      return next.slice(0, RECENT_VIEW_LIMIT);
+    });
   }, [resolvedPropertyId, property.isFeatured, property.name]);
+
+  useEffect(() => {
+    setIsFavorited(favoritePropertyIds.includes(resolvedPropertyId));
+  }, [favoritePropertyIds, resolvedPropertyId]);
 
   const lastTapRef = useRef<{ time: number; side: 'left' | 'right' | null }>({ time: 0, side: null });
 
@@ -417,6 +483,14 @@ export default function PropertyDetails() {
       .filter((key) => key !== resolvedPropertyId)
       .map((key) => ({ id: key, ...PROPERTIES_DATA[key] })),
     [resolvedPropertyId]
+  );
+
+  const recentlyViewedProperties = useMemo<PropertyListItem[]>(
+    () =>
+      recentViewIds
+        .filter((id) => id !== resolvedPropertyId && Boolean(PROPERTIES_DATA[id]))
+        .map((id) => ({ id, ...PROPERTIES_DATA[id] })),
+    [recentViewIds, resolvedPropertyId]
   );
 
   const propertyPriceValue = useMemo(() => parsePrice(property.price || '0'), [property.price]);
@@ -776,8 +850,15 @@ export default function PropertyDetails() {
     return isNaN(monthlyPayment) ? '0' : monthlyPayment.toLocaleString(undefined, { maximumFractionDigits: 0 });
   }, [downPayment, interestRate, loanTerm, property.price]);
 
+  const estimatedMonthlyPaymentValue = useMemo(
+    () => Number(String(estimatedMonthlyPayment || '0').replace(/,/g, '')) || 0,
+    [estimatedMonthlyPayment]
+  );
+
   // ROI Calculator State
   const [expectedMonthlyRent, setExpectedMonthlyRent] = useState('45000');
+  const [monthlyHouseholdIncome, setMonthlyHouseholdIncome] = useState('250000');
+  const [commuteMode, setCommuteMode] = useState<'Drive' | 'Metro' | 'Bike'>('Drive');
 
   const rentalYieldPercent = useMemo(() => {
     const annualRent = (parseFloat(expectedMonthlyRent) || 0) * 12;
@@ -795,6 +876,42 @@ export default function PropertyDetails() {
     const totalGain = totalRent + appreciation;
     return ((totalGain / price) * 100).toFixed(1);
   }, [expectedMonthlyRent, property.price]);
+
+  const affordabilitySummary = useMemo(() => {
+    const monthlyIncome = Math.max(0, parseFloat(monthlyHouseholdIncome) || 0);
+    if (monthlyIncome === 0 || estimatedMonthlyPaymentValue === 0) {
+      return {
+        ratio: null as number | null,
+        label: 'Unavailable',
+        tone: '#94a3b8',
+        recommendation: 'Enter household income to evaluate affordability.',
+      };
+    }
+
+    const ratio = (estimatedMonthlyPaymentValue / monthlyIncome) * 100;
+    if (ratio <= 30) {
+      return {
+        ratio,
+        label: 'Comfortable',
+        tone: '#22c55e',
+        recommendation: 'This EMI is within a healthy range for long-term affordability.',
+      };
+    }
+    if (ratio <= 45) {
+      return {
+        ratio,
+        label: 'Stretch',
+        tone: '#fbbf24',
+        recommendation: 'Manageable, but keep at least 6 months of emergency reserves.',
+      };
+    }
+    return {
+      ratio,
+      label: 'High Risk',
+      tone: '#ef4444',
+      recommendation: 'Consider a higher down payment, longer tenure, or a lower budget.',
+    };
+  }, [monthlyHouseholdIncome, estimatedMonthlyPaymentValue]);
 
   const bankEMIs = useMemo(() => {
     const dp = Math.max(0, Math.min(95, parseFloat(downPayment) || 20));
@@ -864,6 +981,32 @@ export default function PropertyDetails() {
 
     return signals.slice(0, 3);
   }, [trustScore, priceFairness, rentalYieldPercent, property.status, property.possession]);
+
+  const commuteInsights = useMemo(() => {
+    const speedByMode = {
+      Drive: 24,
+      Metro: 30,
+      Bike: 15,
+    } as const;
+
+    const connectivitySeed =
+      property.connectivity ||
+      [
+        { name: 'Global International School', distance: '0.5 km', type: 'school' },
+        { name: 'City Hospital', distance: '1.2 km', type: 'hospital' },
+        { name: 'Metro Station Blue Line', distance: '0.8 km', type: 'metro' },
+      ];
+
+    const pace = speedByMode[commuteMode] || 20;
+    return connectivitySeed.slice(0, 4).map((item) => {
+      const distanceKm = parseFloat(String(item.distance || '').replace(/[^\d.]/g, '')) || 0;
+      const etaMinutes = Math.max(3, Math.round((distanceKm / pace) * 60));
+      return {
+        ...item,
+        etaMinutes,
+      };
+    });
+  }, [property.connectivity, commuteMode]);
 
   const resolveFeatureIcon = (icon: keyof typeof Ionicons.glyphMap | string) => {
     if (typeof icon === 'string' && icon in Ionicons.glyphMap) {
@@ -987,6 +1130,82 @@ export default function PropertyDetails() {
     setFilterReraOnly(true);
     setIsSearchSaved(false);
     setIsFiltersApplied(false);
+  };
+
+  const handleToggleFavorite = () => {
+    const nextState = !isFavorited;
+    setIsFavorited(nextState);
+    setFavoritePropertyIds((prev) =>
+      nextState
+        ? Array.from(new Set([...prev, resolvedPropertyId]))
+        : prev.filter((id) => id !== resolvedPropertyId)
+    );
+
+    Alert.alert(
+      nextState ? 'Added to Shortlist' : 'Removed from Shortlist',
+      nextState
+        ? `${property.name} was added to your shortlisted properties.`
+        : `${property.name} was removed from your shortlisted properties.`
+    );
+  };
+
+  const resetCallbackForm = () => {
+    setCallbackName('');
+    setCallbackPhone('');
+    setCallbackEmail('');
+    setCallbackMessage('');
+    setPreferredContactSlot('Evening');
+    setBuyingTimeline('Within 3 months');
+  };
+
+  const handleSubmitCallback = async () => {
+    const cleanedPhone = callbackPhone.replace(/\D/g, '');
+    const trimmedEmail = callbackEmail.trim().toLowerCase();
+    const trimmedName = callbackName.trim();
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+
+    if (trimmedName.length < 2) {
+      Alert.alert('Validation Error', 'Please enter your full name.');
+      return;
+    }
+    if (!emailValid) {
+      Alert.alert('Validation Error', 'Please enter a valid email address.');
+      return;
+    }
+    if (cleanedPhone.length < 10) {
+      Alert.alert('Validation Error', 'Please enter a valid phone number.');
+      return;
+    }
+
+    const leadPayload = {
+      id: `lead_${Date.now()}`,
+      propertyId: resolvedPropertyId,
+      propertyName: property.name,
+      name: trimmedName,
+      email: trimmedEmail,
+      phone: cleanedPhone,
+      message: callbackMessage.trim(),
+      preferredContactSlot,
+      buyingTimeline,
+      createdAt: new Date().toISOString(),
+      status: 'New',
+    };
+
+    try {
+      const existingRaw = await AsyncStorage.getItem(CALLBACK_LEADS_STORAGE_KEY);
+      const existingLeads = existingRaw ? JSON.parse(existingRaw) : [];
+      const nextLeads = [leadPayload, ...(Array.isArray(existingLeads) ? existingLeads : [])].slice(0, 120);
+      await AsyncStorage.setItem(CALLBACK_LEADS_STORAGE_KEY, JSON.stringify(nextLeads));
+    } catch {
+      // Ignore persistence errors; the user intent is still completed.
+    }
+
+    Alert.alert(
+      'Request Received',
+      `An advisor will contact you in the ${preferredContactSlot.toLowerCase()} window.`
+    );
+    setIsCallbackVisible(false);
+    resetCallbackForm();
   };
 
   const handleTogglePriceDropAlert = () => {
@@ -1371,7 +1590,7 @@ export default function PropertyDetails() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => setIsFavorited(!isFavorited)}
+          onPress={handleToggleFavorite}
         >
           <Ionicons
             name={isFavorited ? 'heart' : 'heart-outline'}
@@ -1782,7 +2001,42 @@ export default function PropertyDetails() {
                 <Ionicons name={item.type === 'school' ? 'book' : item.type === 'hospital' ? 'medical' : item.type === 'metro' ? 'train' : 'cart'} size={16} color="#22d3ee" />
               </View>
               <Text style={styles.connectivityName}>{item.name}</Text>
-              <Text style={styles.connectivityDistance}>{item.distance}</Text>
+            <Text style={styles.connectivityDistance}>{item.distance}</Text>
+          </View>
+          ))}
+        </View>
+
+        <Text style={styles.sectionTitle}>Commute Estimator</Text>
+        <View style={styles.commuteContainer}>
+          <View style={styles.commuteModeRow}>
+            {(['Drive', 'Metro', 'Bike'] as const).map((mode) => (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.commuteModeChip, commuteMode === mode && styles.commuteModeChipActive]}
+                onPress={() => setCommuteMode(mode)}
+              >
+                <Text style={[styles.commuteModeChipText, commuteMode === mode && styles.commuteModeChipTextActive]}>
+                  {mode}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {commuteInsights.map((item, index) => (
+            <View key={`${item.name}-${index}`} style={styles.commuteItem}>
+              <View style={styles.connectivityIcon}>
+                <Ionicons
+                  name={item.type === 'school' ? 'book' : item.type === 'hospital' ? 'medical' : item.type === 'metro' ? 'train' : 'cart'}
+                  size={16}
+                  color="#22d3ee"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.connectivityName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={styles.commuteDistance}>{item.distance}</Text>
+              </View>
+              <Text style={styles.commuteEta}>{item.etaMinutes} min</Text>
             </View>
           ))}
         </View>
@@ -2266,6 +2520,82 @@ export default function PropertyDetails() {
         )}
 
         {activeTab === 'Overview' && (
+          <Pressable style={({ hovered }: any) => [sectionCardBaseStyle, { borderLeftColor: '#f59e0b' }, hovered && styles.sectionCardHover]}>
+            <Text style={styles.sectionTitle}>Saved & Affordability</Text>
+
+            <View style={styles.snapshotGrid}>
+              <View style={styles.snapshotItem}>
+                <Text style={styles.snapshotLabel}>Shortlisted</Text>
+                <Text style={styles.snapshotValue}>{favoritePropertyIds.length}</Text>
+              </View>
+              <View style={styles.snapshotItem}>
+                <Text style={styles.snapshotLabel}>Recent Views</Text>
+                <Text style={styles.snapshotValue}>{Math.max(0, recentViewIds.length - 1)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.roiInputRow}>
+              <Text style={styles.inputLabel}>Monthly Household Income (INR)</Text>
+              <TextInput
+                style={styles.roiInput}
+                value={monthlyHouseholdIncome}
+                onChangeText={setMonthlyHouseholdIncome}
+                keyboardType="numeric"
+                placeholder="e.g. 250000"
+                placeholderTextColor="#475569"
+              />
+            </View>
+
+            <View style={styles.affordabilityCard}>
+              <View style={styles.affordabilityHeader}>
+                <Text style={styles.affordabilityLabel}>EMI to Income</Text>
+                <View style={[styles.affordabilityBadge, { borderColor: affordabilitySummary.tone }]}>
+                  <Text style={[styles.affordabilityBadgeText, { color: affordabilitySummary.tone }]}>
+                    {affordabilitySummary.label}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.affordabilityRatio}>
+                {affordabilitySummary.ratio === null ? '--' : `${affordabilitySummary.ratio.toFixed(1)}%`}
+              </Text>
+              <Text style={styles.affordabilityHint}>{affordabilitySummary.recommendation}</Text>
+            </View>
+          </Pressable>
+        )}
+
+        {activeTab === 'Overview' && recentlyViewedProperties.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Recently Viewed</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.similarScroll}
+            >
+              {recentlyViewedProperties.slice(0, 10).map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.similarCard}
+                  onPress={() => {
+                    router.push({ pathname: '/property/[id]', params: { id: item.id } } as any);
+                  }}
+                >
+                  <Image source={{ uri: item.image }} style={styles.similarImage} />
+                  <View style={styles.similarInfo}>
+                    <Text style={styles.similarName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.similarMeta} numberOfLines={1}>
+                      {item.location}
+                    </Text>
+                    <Text style={styles.similarPrice}>{item.price}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {activeTab === 'Overview' && (
           <>
             <Text style={styles.sectionTitle}>Recommended Properties</Text>
             <Text style={styles.recommendationHint}>
@@ -2420,6 +2750,12 @@ export default function PropertyDetails() {
             
             <Text style={styles.calcResultLabel}>Estimated Monthly Payment</Text>
             <Text style={styles.calcResultValue}>₹ {estimatedMonthlyPayment}</Text>
+            <View style={styles.affordabilityInline}>
+              <Text style={styles.affordabilityInlineText}>
+                Affordability: {affordabilitySummary.label}
+                {affordabilitySummary.ratio !== null ? ` (${affordabilitySummary.ratio.toFixed(1)}% of income)` : ''}
+              </Text>
+            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Down Payment (%)</Text>
@@ -2766,20 +3102,43 @@ export default function PropertyDetails() {
                 />
               </View>
 
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Preferred Contact Slot</Text>
+                <View style={styles.tagToggleContainer}>
+                  {['Morning', 'Afternoon', 'Evening'].map((slot) => (
+                    <TouchableOpacity
+                      key={slot}
+                      style={[styles.tagToggle, preferredContactSlot === slot && styles.tagToggleActive]}
+                      onPress={() => setPreferredContactSlot(slot)}
+                    >
+                      <Text style={[styles.tagToggleText, preferredContactSlot === slot && styles.tagToggleTextActive]}>
+                        {slot}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Buying Timeline</Text>
+                <View style={styles.tagToggleContainer}>
+                  {['Immediately', 'Within 3 months', '3-6 months', 'Just exploring'].map((timeline) => (
+                    <TouchableOpacity
+                      key={timeline}
+                      style={[styles.tagToggle, buyingTimeline === timeline && styles.tagToggleActive]}
+                      onPress={() => setBuyingTimeline(timeline)}
+                    >
+                      <Text style={[styles.tagToggleText, buyingTimeline === timeline && styles.tagToggleTextActive]}>
+                        {timeline}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
               <TouchableOpacity 
                 style={styles.submitReviewBtn}
-                onPress={() => {
-                  if (!callbackName || !callbackPhone || !callbackEmail) {
-                    Alert.alert("Error", "Please fill in all fields");
-                    return;
-                  }
-                  Alert.alert("Success", "Your request has been sent. An agent will call you soon.");
-                  setIsCallbackVisible(false);
-                  setCallbackName('');
-                  setCallbackPhone('');
-                  setCallbackEmail('');
-                  setCallbackMessage('');
-                }}
+                onPress={handleSubmitCallback}
               >
                 <Text style={styles.submitReviewText}>Request Callback</Text>
               </TouchableOpacity>
