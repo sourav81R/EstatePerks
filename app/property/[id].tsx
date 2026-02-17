@@ -173,37 +173,42 @@ const FAVORITES_STORAGE_KEY = 'estateperks:favorites:v1';
 const RECENT_VIEWS_STORAGE_KEY = 'estateperks:recentViews:v1';
 const CALLBACK_LEADS_STORAGE_KEY = 'estateperks:callbackLeads:v1';
 const RECENT_VIEW_LIMIT = 8;
+const AI_ASSISTANT_ENDPOINT = process.env.EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT;
 const DEFAULT_VIDEO_PLACEHOLDER =
-  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4';
+  'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room.mp4';
 const RELIABLE_VIDEO_FALLBACKS = [
-  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
-  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
-  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
-  'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+  'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-entrance.mp4',
+  'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room-b-roll.mp4',
+  'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-main-bedroom.mp4',
+  'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-second-bedroom.mp4',
+  'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-home-office.mp4',
 ];
 
-// Replace these with real property walkthrough clips from your backend when available.
+const isLegacySampleVideo = (url?: string) =>
+  !!url && /(big[_\s-]?buck[_\s-]?bunny|test-videos\.co\.uk\/vids\/bigbuckbunny)/i.test(url);
+
+// Property-tour clips (works on mobile + desktop/laptop).
 const PROPERTY_VIDEO_URLS: Record<string, string> = {
-  '1': 'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4',
-  '2': 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-  '3': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
-  '4': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
-  '5': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
-  '6': 'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
-  '7': 'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
-  '8': 'https://samplelib.com/lib/preview/mp4/sample-15s.mp4',
-  '9': 'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
-  '10': 'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
-  '11': 'https://samplelib.com/lib/preview/mp4/sample-15s.mp4',
-  '12': 'https://samplelib.com/lib/preview/mp4/sample-20s.mp4',
-  '13': 'https://samplelib.com/lib/preview/mp4/sample-30s.mp4',
-  '14': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
-  '15': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
-  '16': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
-  '17': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
-  '18': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
-  '19': 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
-  '20': 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+  '1': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-entrance.mp4',
+  '2': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room.mp4',
+  '3': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room-b-roll.mp4',
+  '4': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-main-bedroom.mp4',
+  '5': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-main-bedroom-b-roll.mp4',
+  '6': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-second-bedroom.mp4',
+  '7': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-second-bedroom-b-roll.mp4',
+  '8': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-home-office.mp4',
+  '9': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-home-office-b-roll.mp4',
+  '10': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-entrance.mp4',
+  '11': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room.mp4',
+  '12': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room-b-roll.mp4',
+  '13': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-main-bedroom.mp4',
+  '14': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-main-bedroom-b-roll.mp4',
+  '15': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-second-bedroom.mp4',
+  '16': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-second-bedroom-b-roll.mp4',
+  '17': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-home-office.mp4',
+  '18': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-home-office-b-roll.mp4',
+  '19': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room.mp4',
+  '20': 'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-main-bedroom.mp4',
 };
 
 /* ---------------- SCREEN ---------------- */
@@ -416,8 +421,13 @@ export default function PropertyDetails() {
   const [isAIChatVisible, setIsAIChatVisible] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState([
-    { id: '1', text: `Hi! I'm your AI assistant for ${property.name}. How can I help you today?`, sender: 'ai' }
+    {
+      id: '1',
+      text: `Hi! I'm your AI assistant for ${property.name}. Ask me about price fairness, EMI, investment potential, family suitability, locality, amenities, possession, or builder trust.`,
+      sender: 'ai'
+    }
   ]);
+  const [lastAIIntent, setLastAIIntent] = useState<string | null>(null);
   const [visitStatus, setVisitStatus] = useState<'none' | 'scheduled' | 'completed'>('none');
   const [isFeedbackModalVisible, setIsFeedbackModalVisible] = useState(false);
   const [visitFeedback, setVisitFeedback] = useState('');
@@ -497,8 +507,13 @@ export default function PropertyDetails() {
     setIsPriceDropAlertActive(false);
     setIsFiltersApplied(false);
     setChatMessages([
-      { id: '1', text: `Hi! I'm your AI assistant for ${property.name}. How can I help you today?`, sender: 'ai' }
+      {
+        id: '1',
+        text: `Hi! I'm your AI assistant for ${property.name}. Ask me about price fairness, EMI, investment potential, family suitability, locality, amenities, possession, or builder trust.`,
+        sender: 'ai'
+      }
     ]);
+    setLastAIIntent(null);
     setRecentViewIds((prev) => {
       const next = [resolvedPropertyId, ...prev.filter((id) => id !== resolvedPropertyId)];
       return next.slice(0, RECENT_VIEW_LIMIT);
@@ -693,7 +708,11 @@ export default function PropertyDetails() {
   const videoCandidates = useMemo(() => {
     const mappedVideo = PROPERTY_VIDEO_URLS[resolvedPropertyId];
     const propertyVideo =
-      property.videoUrl && property.videoUrl !== DEFAULT_VIDEO_PLACEHOLDER ? property.videoUrl : undefined;
+      property.videoUrl &&
+      property.videoUrl !== DEFAULT_VIDEO_PLACEHOLDER &&
+      !isLegacySampleVideo(property.videoUrl)
+        ? property.videoUrl
+        : undefined;
 
     return Array.from(
       new Set(
@@ -1123,40 +1142,203 @@ export default function PropertyDetails() {
     return 'checkmark-circle-outline';
   };
 
+  const amenityHighlights = useMemo(() => {
+    if (!property.amenities) return [];
+    return Array.from(new Set(Object.values(property.amenities).flat())).slice(0, 8);
+  }, [property.amenities]);
+
+  const classifyChatIntent = (query: string) => {
+    const text = query.toLowerCase();
+    const includesAny = (terms: string[]) => terms.some((term) => text.includes(term));
+
+    if (includesAny(['hi', 'hello', 'hey', 'good morning', 'good evening'])) return 'greeting';
+    if (includesAny(['family', 'kids', 'children', 'school', 'safe'])) return 'family';
+    if (includesAny(['price', 'cost', 'expensive', 'fair', 'overpriced', 'cheap'])) return 'price';
+    if (includesAny(['emi', 'mortgage', 'loan', 'afford', 'down payment', 'monthly'])) return 'emi';
+    if (includesAny(['invest', 'investment', 'roi', 'yield', 'return', 'appreciation', 'worth'])) return 'investment';
+    if (includesAny(['locality', 'neighborhood', 'location', 'connectivity', 'metro', 'hospital', 'school nearby', 'commute'])) return 'locality';
+    if (includesAny(['amenities', 'facilities', 'clubhouse', 'gym', 'pool', 'parking'])) return 'amenities';
+    if (includesAny(['builder', 'rera', 'legal', 'trust', 'verified', 'document'])) return 'trust';
+    if (includesAny(['possession', 'handover', 'timeline', 'ready', 'when can i move'])) return 'possession';
+    if (includesAny(['risk', 'cons', 'bad', 'drawback', 'problem', 'negative'])) return 'risks';
+    if (includesAny(['visit', 'schedule', 'book', 'site visit', 'call me', 'agent'])) return 'next_step';
+    return 'general';
+  };
+
+  const requestRemoteAIResponse = async (question: string): Promise<string | null> => {
+    if (!AI_ASSISTANT_ENDPOINT) return null;
+
+    try {
+      const payload = {
+        question,
+        property: {
+          id: resolvedPropertyId,
+          name: property.name,
+          location: property.location,
+          price: property.price,
+          type: property.type,
+          beds: property.beds,
+          baths: property.baths,
+          sqft: property.sqft,
+          status: property.status,
+          possession: property.possession,
+          builder: property.builder,
+          reraId: property.reraId,
+          localityScores: property.localityScores,
+          amenities: property.amenities,
+          connectivity: property.connectivity,
+          localityInsights: property.localityInsights,
+          localitySentiment: property.localitySentiment,
+        },
+        metrics: {
+          trustScore,
+          rentalYieldPercent,
+          fiveYearROI,
+          estimatedMonthlyPayment,
+          priceFairness,
+          affordabilitySummary,
+        },
+        recentConversation: chatMessages.slice(-8).map((msg) => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text,
+        })),
+      };
+
+      const res = await fetch(AI_ASSISTANT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      const answer =
+        (typeof data?.answer === 'string' && data.answer) ||
+        (typeof data?.response === 'string' && data.response) ||
+        (typeof data?.message === 'string' && data.message) ||
+        null;
+
+      return answer?.trim() || null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleAIChat = (input?: any) => {
     const message = typeof input === 'string' ? input : chatInput;
     if (!message.trim()) return;
 
     const userMsg = { id: Date.now().toString(), text: message, sender: 'user' };
-    setChatMessages(prev => [...prev, userMsg]);
-    const currentInput = message;
+    setChatMessages((prev) => [...prev, userMsg]);
+    const currentInput = message.trim();
     if (typeof input !== 'string') setChatInput('');
-    
-    setTimeout(() => {
-      let response = "I'm not sure about that. Would you like to speak with an agent?";
-      const lowInput = currentInput.toLowerCase();
-      
-      if (lowInput.includes('family')) {
-        response = property.localitySentiment?.pros?.includes('Safe for Women') || property.localitySentiment?.pros?.includes('Premium Schools')
-          ? "Yes, this property is excellent for families. It's in a safe neighborhood with premium schools nearby."
-          : "It's a good choice, though the area is quite busy. It has great amenities for children.";
-      } else if (lowInput.includes('con') || lowInput.includes('bad')) {
-        response = `Some things to consider: ${property.localitySentiment?.cons?.join(', ') || 'The area is premium so maintenance might be higher.'}`;
-      } else if (lowInput.includes('investment') || lowInput.includes('worth')) {
-        response = property.aiInsights?.summary || "It's a strong investment given the locality's appreciation trends.";
-      } else if (lowInput.includes('price') || lowInput.includes('fair')) {
-        if (!priceFairness) {
-          response = "I need more locality benchmark data for a precise fair-pricing recommendation.";
-        } else if (priceFairness.isFair) {
-          response = `The price is very fair. It's actually INR ${priceFairness.diff}/sqft (${priceFairness.percent}%) lower than the locality average.`;
-        } else {
-          response = `The price is about ${priceFairness.percent}% above average, but this is justified by the premium builder and superior amenities.`;
-        }
+
+    setTimeout(async () => {
+      const remoteAnswer = await requestRemoteAIResponse(currentInput);
+      if (remoteAnswer) {
+        const aiMsg = { id: (Date.now() + 1).toString(), text: remoteAnswer, sender: 'ai' };
+        setLastAIIntent('remote_ai');
+        setChatMessages((prev) => [...prev, aiMsg]);
+        return;
       }
-      
+
+      const detectedIntent = classifyChatIntent(currentInput);
+      const intent = detectedIntent === 'general' && /why|how|explain|more|detail/.test(currentInput.toLowerCase()) && lastAIIntent
+        ? lastAIIntent
+        : detectedIntent;
+      setLastAIIntent(intent);
+
+      const safetyScore = property.localityScores?.find((s) => s.label === 'Safety')?.score;
+      const connectivityScore = property.localityScores?.find((s) => s.label === 'Connectivity')?.score;
+      const lifestyleScore = property.localityScores?.find((s) => s.label === 'Lifestyle')?.score;
+      const topSchools = (property.connectivity || []).filter((item) => item.type === 'school').slice(0, 2);
+      const topHospitals = (property.connectivity || []).filter((item) => item.type === 'hospital').slice(0, 2);
+      const moveInReady =
+        String(property.status || '').toLowerCase().includes('ready') ||
+        String(property.possession || '').toLowerCase().includes('immediate');
+      const bestBank = bankEMIs
+        .map((bank) => ({ ...bank, numericEmi: parseInt(String(bank.emi).replace(/[^\d]/g, ''), 10) || Number.MAX_SAFE_INTEGER }))
+        .sort((a, b) => a.numericEmi - b.numericEmi)[0];
+
+      let response = '';
+
+      if (intent === 'greeting') {
+        response = `Hi! I can help with ${property.name}'s price analysis, EMI, investment outlook, locality quality, amenities, and trust factors. What would you like to evaluate first?`;
+      } else if (intent === 'family') {
+        const familyAmenityHint = amenityHighlights.filter((item) =>
+          /kids|play|park|security|school|garden/i.test(item)
+        ).slice(0, 3);
+        const familyVerdict =
+          (safetyScore || 0) >= 8
+            ? 'This looks like a strong family-friendly option.'
+            : (safetyScore || 0) >= 6
+            ? 'This can work for families, with a few trade-offs.'
+            : 'I would evaluate this carefully for family usage.';
+
+        response = `${familyVerdict} Safety score is ${safetyScore ?? 'N/A'}/10 and connectivity is ${connectivityScore ?? 'N/A'}/10.` +
+          `${topSchools.length ? ` Nearby schools: ${topSchools.map((s) => `${s.name} (${s.distance})`).join(', ')}.` : ''}` +
+          `${familyAmenityHint.length ? ` Family-relevant amenities include ${familyAmenityHint.join(', ')}.` : ''}`;
+      } else if (intent === 'price') {
+        if (!priceFairness) {
+          response = `Listed price is ${property.price}. I don't have reliable locality benchmark data for exact fair-value scoring, but I can estimate EMI and investment return if you share your budget and down payment.`;
+        } else if (priceFairness.isFair) {
+          response = `Price looks attractive. ${property.name} is around INR ${priceFairness.diff}/sqft (${priceFairness.percent}%) below the locality benchmark, while offering ${property.type} specs (${property.beds} bed, ${property.baths} bath, ${property.sqft} sqft).`;
+        } else {
+          response = `Price is premium by about ${priceFairness.percent}% vs locality average. It may still be justified if builder trust, location access, and amenity depth are your top priorities.`;
+        }
+      } else if (intent === 'emi') {
+        response = `Estimated EMI is INR ${estimatedMonthlyPayment}/month with current assumptions. Affordability status is ${affordabilitySummary.label}` +
+          `${affordabilitySummary.ratio !== null ? ` (${affordabilitySummary.ratio.toFixed(1)}% of monthly income).` : '.'}` +
+          `${bestBank ? ` Lowest EMI in our bank panel is ${bestBank.name}: INR ${bestBank.emi}.` : ''} ${affordabilitySummary.recommendation}`;
+      } else if (intent === 'investment') {
+        const insightText = property.aiInsights?.summary ? ` ${property.aiInsights.summary}` : '';
+        response = `Investment snapshot: rental yield is ${rentalYieldPercent}% and estimated 5-year total ROI is ${fiveYearROI}%.` +
+          `${property.localityInsights?.length ? ` Locality trend: ${property.localityInsights.map((i) => `${i.label} ${i.value}`).join(', ')}.` : ''}` +
+          insightText;
+      } else if (intent === 'locality') {
+        const commuteLine = commuteInsights
+          .slice(0, 3)
+          .map((item) => `${item.name} (${item.distance}, ~${item.etaMinutes} min by ${commuteMode.toLowerCase()})`)
+          .join('; ');
+
+        response = `${property.location} has locality scores of Safety ${safetyScore ?? 'N/A'}/10, Connectivity ${connectivityScore ?? 'N/A'}/10, and Lifestyle ${lifestyleScore ?? 'N/A'}/10.` +
+          `${commuteLine ? ` Quick access points: ${commuteLine}.` : ''}` +
+          `${topHospitals.length ? ` Nearby hospitals: ${topHospitals.map((h) => `${h.name} (${h.distance})`).join(', ')}.` : ''}`;
+      } else if (intent === 'amenities') {
+        const categorySummary = property.amenities
+          ? Object.keys(property.amenities)
+              .slice(0, 3)
+              .map((cat) => `${cat}: ${property.amenities?.[cat]?.slice(0, 3).join(', ')}`)
+              .join(' | ')
+          : '';
+        response = categorySummary
+          ? `Top amenities for ${property.name}: ${categorySummary}.`
+          : `Core highlights include ${property.features?.map((f) => f.label).slice(0, 4).join(', ') || 'modern lifestyle amenities'}.`;
+      } else if (intent === 'trust') {
+        response = `Trust snapshot: Builder is ${property.builder}${property.builderExperience ? ` (${property.builderExperience})` : ''}.` +
+          `${property.totalProjects ? ` Delivered projects: ${property.totalProjects}.` : ''}` +
+          ` RERA ID: ${property.reraId}. Internal trust score is ${trustScore}/100 (${trustLevel.label}).`;
+      } else if (intent === 'possession') {
+        response = `${property.status} project with possession target: ${property.possession}.` +
+          `${moveInReady ? ' This is suitable for near-immediate move-in.' : ' This is better for planned move-in and phased payment buyers.'}` +
+          `${property.timeline?.length ? ` Timeline milestones: ${property.timeline.slice(0, 3).map((t) => `${t.date} - ${t.label}`).join('; ')}.` : ''}`;
+      } else if (intent === 'risks') {
+        const riskList = property.localitySentiment?.cons?.length
+          ? property.localitySentiment.cons.slice(0, 3).join(', ')
+          : 'premium maintenance outgo and possible peak-hour traffic';
+        response = `Key risks to consider: ${riskList}.` +
+          `${!priceFairness ? '' : priceFairness.isFair ? ' Pricing risk is relatively controlled versus locality averages.' : ' Pricing is on the premium side, so negotiation is important.'}` +
+          ` I can help you with a negotiation-ready checklist if needed.`;
+      } else if (intent === 'next_step') {
+        response = `Best next step is a site visit plus a document check. If you want, I can suggest a focused checklist for visit points, legal checks, and price negotiation before you talk to the agent.`;
+      } else {
+        response = `Here's a quick summary for ${property.name}: ${property.type} in ${property.location}, priced at ${property.price}, trust ${trustScore}/100, rental yield ${rentalYieldPercent}%, and estimated EMI INR ${estimatedMonthlyPayment}/month.` +
+          ` Ask me a focused question like "Is this good for families?", "Is price fair?", or "What's the investment potential?"`;
+      }
+
       const aiMsg = { id: (Date.now() + 1).toString(), text: response, sender: 'ai' };
-      setChatMessages(prev => [...prev, aiMsg]);
-    }, 1000);
+      setChatMessages((prev) => [...prev, aiMsg]);
+    }, 450);
   };
 
   const handleScheduleVisit = () => {
@@ -1503,6 +1685,7 @@ export default function PropertyDetails() {
               autoExitOnRotate: true,
             }}
             allowsPictureInPicture
+            playsInline
             onFullscreenEnter={() => setIsFullscreen(true)}
             onFullscreenExit={() => setIsFullscreen(false)}
             style={StyleSheet.absoluteFill}

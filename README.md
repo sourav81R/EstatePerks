@@ -16,6 +16,25 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+3. Enable real AI Property Assistant
+
+   1. Open `.env` and set `OPENAI_API_KEY`.
+   2. Start AI server:
+
+   ```bash
+   npm run ai-server
+   ```
+
+   3. Keep Expo app running:
+
+   ```bash
+   npm start
+   ```
+
+   Notes:
+   - Desktop/web can use `EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT=http://127.0.0.1:8787/api/ai-assistant`
+   - Physical mobile device should use your computer LAN IP instead of `127.0.0.1`
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)

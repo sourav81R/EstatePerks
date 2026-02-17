@@ -56,6 +56,15 @@ const PLATFORM_HIGHLIGHTS = [
 
 const SAVED_PROPERTIES_STORAGE_KEY = 'estateperks:savedProperties:v1';
 const MAX_COMPARE_PROPERTIES = 3;
+const AI_ASSISTANT_ENDPOINT = process.env.EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT;
+
+type ChatSender = 'ai' | 'user';
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  sender: ChatSender;
+}
 
 const ShimmerChar = ({ char, index, total, isAccent, baseStyle }: { char: string, index: number, total: number, isAccent: boolean, baseStyle: any }) => {
   const shimmerValue = useSharedValue(0);
@@ -143,28 +152,151 @@ export default function HomeScreen() {
   };
 
   const [isTermsModalVisible, setIsTermsModalVisible] = useState(false);
-  const [chatMessages, setChatMessages] = useState([
-    { id: '1', text: "Hi there! 👋 Welcome to EstatePerks support. How can we assist you with your property search today?", sender: 'ai' }
+  const chatScrollRef = useRef<ScrollView>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      text: "Hi there! Welcome to EstatePerks AI support. Ask me anything about visits, loans, pricing, or shortlisting.",
+      sender: 'ai',
+    }
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [isChatResponding, setIsChatResponding] = useState(false);
+  const [chatStatusMessage, setChatStatusMessage] = useState<string | null>(null);
 
-  const handleSendMessage = (text?: string) => {
-    const messageText = typeof text === 'string' ? text : chatInput;
-    if (!messageText.trim()) return;
+  const requestSupportAIResponse = useCallback(async (
+    question: string,
+    conversation: ChatMessage[]
+  ): Promise<{ answer: string | null; endpointFailed: boolean }> => {
+    if (!AI_ASSISTANT_ENDPOINT) {
+      return { answer: null, endpointFailed: false };
+    }
 
-    const userMsg = { id: Date.now().toString(), text: messageText, sender: 'user' };
-    setChatMessages(prev => [...prev, userMsg]);
-    setChatInput('');
-
-    setTimeout(() => {
-      const aiMsg = {
-        id: (Date.now() + 1).toString(),
-        text: "Thanks for reaching out! An agent will be with you shortly to help with your request.",
-        sender: 'ai'
+    try {
+      const payload = {
+        assistantMode: 'support',
+        question,
+        property: {},
+        metrics: {},
+        appContext: {
+          userFilters: {
+            city: selectedCity,
+            intent: selectedIntent,
+            bhk: selectedBHK,
+            propertyType: selectedType,
+            searchQuery: searchQuery.trim(),
+            onlySaved: showSavedOnly,
+          },
+          shortlistCount: savedPropertyIds.length,
+          compareCount: comparePropertyIds.length,
+          platform: Platform.OS,
+        },
+        recentConversation: conversation.slice(-10).map((msg) => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text,
+        })),
       };
-      setChatMessages(prev => [...prev, aiMsg]);
-    }, 1000);
-  };
+
+      const res = await fetch(AI_ASSISTANT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        return { answer: null, endpointFailed: true };
+      }
+
+      const data = await res.json();
+      const answer =
+        (typeof data?.answer === 'string' && data.answer) ||
+        (typeof data?.response === 'string' && data.response) ||
+        (typeof data?.message === 'string' && data.message) ||
+        null;
+
+      return { answer: answer?.trim() || null, endpointFailed: false };
+    } catch {
+      return { answer: null, endpointFailed: true };
+    }
+  }, [
+    comparePropertyIds.length,
+    savedPropertyIds.length,
+    searchQuery,
+    selectedBHK,
+    selectedCity,
+    selectedIntent,
+    selectedType,
+    showSavedOnly,
+  ]);
+
+  const getFallbackSupportReply = useCallback((question: string) => {
+    const q = question.toLowerCase();
+
+    if (/(hello|hi|hey|namaste)/.test(q)) {
+      return 'Hi! I can help with visits, loan checks, price guidance, and finding better matches. What do you want to do first?';
+    }
+
+    if (/(book|schedule|visit|tour|site visit)/.test(q)) {
+      return 'To book a visit: 1) open a property card, 2) tap "Schedule Visit", 3) pick your preferred slot. Keep an ID proof ready for gated communities.';
+    }
+
+    if (/(loan|emi|eligib|mortgage|finance)/.test(q)) {
+      return 'For fast loan eligibility checks, keep your monthly income, current EMIs, and down payment amount ready. A safe thumb rule is total EMIs under about 40% of net monthly income.';
+    }
+
+    if (/(price|trend|market|appreciation|roi|investment)/.test(q)) {
+      return `Current filters are set to ${selectedIntent} in ${selectedCity}. Compare at least 3 similar listings by price/sqft and possession stage before negotiating.`;
+    }
+
+    if (/(contact|agent|call|whatsapp|human|owner)/.test(q)) {
+      return 'You can connect with an agent from any property details page. Share budget, preferred locality, and move-in timeline to get better recommendations quickly.';
+    }
+
+    return 'I can help with booking visits, EMI/loan checks, locality comparisons, and shortlisting. Ask a focused question and I will give step-by-step guidance.';
+  }, [selectedCity, selectedIntent]);
+
+  const handleSendMessage = useCallback(async (text?: string) => {
+    const messageText = (typeof text === 'string' ? text : chatInput).trim();
+    if (!messageText || isChatResponding) return;
+
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      text: messageText,
+      sender: 'user',
+    };
+    const conversation = [...chatMessages, userMsg];
+    setChatMessages(conversation);
+    if (typeof text !== 'string') setChatInput('');
+    setChatStatusMessage(null);
+    setIsChatResponding(true);
+
+    try {
+      const { answer, endpointFailed } = await requestSupportAIResponse(messageText, conversation);
+      const aiMessage = answer || getFallbackSupportReply(messageText);
+
+      if (endpointFailed) {
+        setChatStatusMessage('Live AI endpoint is unavailable right now. Showing instant support guidance.');
+      }
+
+      const aiMsg: ChatMessage = {
+        id: `${Date.now() + 1}`,
+        text: aiMessage,
+        sender: 'ai',
+      };
+
+      setChatMessages((prev) => [...prev, aiMsg]);
+    } finally {
+      setIsChatResponding(false);
+    }
+  }, [chatInput, chatMessages, getFallbackSupportReply, isChatResponding, requestSupportAIResponse]);
+
+  useEffect(() => {
+    if (!isChatVisible) return;
+    const timer = setTimeout(() => {
+      chatScrollRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [chatMessages, isChatResponding, isChatVisible]);
 
   const clearAllFilters = () => {
     setSearchQuery('');
@@ -1177,13 +1309,26 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 20 }}>
+            <ScrollView
+              ref={chatScrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ gap: 12, paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+            >
               {chatMessages.map(msg => (
                 <View key={msg.id} style={[styles.chatBubble, msg.sender === 'user' ? styles.userBubble : styles.aiBubble]}>
                   <Text style={[styles.chatText, msg.sender === 'user' ? styles.userChatText : styles.aiChatText]}>{msg.text}</Text>
                 </View>
               ))}
+              {isChatResponding ? (
+                <View style={[styles.chatBubble, styles.aiBubble, styles.typingBubble]}>
+                  <Text style={[styles.chatText, styles.aiChatText, styles.typingText]}>Thinking...</Text>
+                </View>
+              ) : null}
             </ScrollView>
+            {chatStatusMessage ? (
+              <Text style={styles.chatStatusText}>{chatStatusMessage}</Text>
+            ) : null}
 
             <View style={styles.quickReplyContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -1192,8 +1337,10 @@ export default function HomeScreen() {
                     key={index}
                     style={({ hovered }) => [
                       styles.quickReplyChip,
-                      hovered && Platform.OS === 'web' && styles.chipHover
+                      isChatResponding && styles.quickReplyChipDisabled,
+                      hovered && Platform.OS === 'web' && !isChatResponding && styles.chipHover
                     ]}
+                    disabled={isChatResponding}
                     onPress={() => handleSendMessage(reply)}
                   >
                     <Text style={styles.quickReplyText}>{reply}</Text>
@@ -1209,10 +1356,15 @@ export default function HomeScreen() {
                 placeholderTextColor="#475569"
                 value={chatInput}
                 onChangeText={setChatInput}
+                editable={!isChatResponding}
                 onSubmitEditing={() => handleSendMessage()}
               />
-              <TouchableOpacity style={styles.chatSendBtn} onPress={() => handleSendMessage()}>
-                <Ionicons name="send" size={20} color="#020617" />
+              <TouchableOpacity
+                style={[styles.chatSendBtn, (isChatResponding || !chatInput.trim()) && styles.chatSendBtnDisabled]}
+                onPress={() => handleSendMessage()}
+                disabled={isChatResponding || !chatInput.trim()}
+              >
+                <Ionicons name={isChatResponding ? "time-outline" : "send"} size={20} color="#020617" />
               </TouchableOpacity>
             </View>
           </View>
@@ -2576,9 +2728,12 @@ const styles = StyleSheet.create({
   chatBubble: { padding: 12, borderRadius: 16, maxWidth: '85%' },
   aiBubble: { backgroundColor: '#1e293b', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
   userBubble: { backgroundColor: '#22d3ee', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+  typingBubble: { borderColor: '#334155', borderWidth: 1 },
+  typingText: { fontStyle: 'italic' },
   chatText: { fontSize: 14, lineHeight: 20 },
   aiChatText: { color: '#e2e8f0' },
   userChatText: { color: '#020617', fontWeight: '500' },
+  chatStatusText: { color: '#fbbf24', fontSize: 12, marginBottom: 10 },
   inputLabel: {
     color: '#cbd5e1',
     fontSize: 14,
@@ -2598,6 +2753,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(34, 211, 238, 0.3)',
     ...(Platform.OS === 'web' ? { transitionProperty: 'all', transitionDuration: '0.2s' } : {}),
+  },
+  quickReplyChipDisabled: {
+    opacity: 0.55,
   },
   quickReplyText: {
     color: '#22d3ee',
@@ -2624,6 +2782,11 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center'
+  },
+  chatSendBtnDisabled: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   aboutText: {
     color: '#cbd5e1',
@@ -2753,3 +2916,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
