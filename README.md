@@ -19,7 +19,8 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 3. Enable local backend (AI + newsletter emails)
 
    1. Open `.env` and set:
-      - `OPENAI_API_KEY`
+      - `GEMINI_API_KEY` (recommended for Chat Assist)
+      - `GEMINI_MODEL` (example: `gemini-2.5-flash`)
       - `RESEND_API_KEY`
       - `NEWSLETTER_FROM_EMAIL` (use a verified sender in Resend for production)
 

@@ -34,9 +34,9 @@ const TESTIMONIALS = [
 
 const QUICK_REPLIES = [
   "How to book a visit?",
-  "Check loan eligibility",
-  "Price trends",
-  "Contact agent"
+  "Explain home loan pre-approval",
+  "Summarize AI in simple words",
+  "Give me a 7-day productivity plan"
 ];
 
 const TRENDING_LOCALITIES = [
@@ -57,6 +57,9 @@ const PLATFORM_HIGHLIGHTS = [
 const SAVED_PROPERTIES_STORAGE_KEY = 'estateperks:savedProperties:v1';
 const MAX_COMPARE_PROPERTIES = 3;
 const AI_ASSISTANT_ENDPOINT = process.env.EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT;
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_API_BASE = (process.env.EXPO_PUBLIC_GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
 const APP_STORE_URL = process.env.EXPO_PUBLIC_APPLE_APP_STORE_URL || 'https://apps.apple.com/';
 const GOOGLE_PLAY_URL = process.env.EXPO_PUBLIC_GOOGLE_PLAY_STORE_URL || 'https://play.google.com/store/apps';
 const NEWSLETTER_SUBSCRIBE_ENDPOINT = process.env.EXPO_PUBLIC_NEWSLETTER_SUBSCRIBE_ENDPOINT
@@ -199,7 +202,7 @@ export default function HomeScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      text: "Hi there! Welcome to EstatePerks AI support. Ask me anything about visits, loans, pricing, or shortlisting.",
+      text: "Hi! I am your AI Chat Assist. Ask me anything, including real-estate, learning, planning, or general questions.",
       sender: 'ai',
     }
   ]);
@@ -211,56 +214,121 @@ export default function HomeScreen() {
     question: string,
     conversation: ChatMessage[]
   ): Promise<{ answer: string | null; endpointFailed: boolean }> => {
-    if (!AI_ASSISTANT_ENDPOINT) {
-      return { answer: null, endpointFailed: false };
-    }
-
-    try {
-      const payload = {
-        assistantMode: 'support',
-        question,
-        property: {},
-        metrics: {},
-        appContext: {
-          userFilters: {
-            city: selectedCity,
-            intent: selectedIntent,
-            bhk: selectedBHK,
-            propertyType: selectedType,
-            searchQuery: searchQuery.trim(),
-            onlySaved: showSavedOnly,
-          },
-          shortlistCount: savedPropertyIds.length,
-          compareCount: comparePropertyIds.length,
-          platform: Platform.OS,
+    const payload = {
+      assistantMode: 'support',
+      question,
+      property: {},
+      metrics: {},
+      appContext: {
+        userFilters: {
+          city: selectedCity,
+          intent: selectedIntent,
+          bhk: selectedBHK,
+          propertyType: selectedType,
+          searchQuery: searchQuery.trim(),
+          onlySaved: showSavedOnly,
         },
-        recentConversation: conversation.slice(-10).map((msg) => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.text,
-        })),
-      };
+        shortlistCount: savedPropertyIds.length,
+        compareCount: comparePropertyIds.length,
+        platform: Platform.OS,
+      },
+      recentConversation: conversation.slice(-10).map((msg) => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text,
+      })),
+    };
 
-      const res = await fetch(AI_ASSISTANT_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    let endpointFailed = false;
 
-      if (!res.ok) {
-        return { answer: null, endpointFailed: true };
+    if (AI_ASSISTANT_ENDPOINT) {
+      try {
+        const res = await fetch(AI_ASSISTANT_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const answer =
+            (typeof data?.answer === 'string' && data.answer) ||
+            (typeof data?.response === 'string' && data.response) ||
+            (typeof data?.message === 'string' && data.message) ||
+            null;
+
+          if (answer?.trim()) {
+            return { answer: answer.trim(), endpointFailed: false };
+          }
+        } else {
+          endpointFailed = true;
+        }
+      } catch {
+        endpointFailed = true;
       }
-
-      const data = await res.json();
-      const answer =
-        (typeof data?.answer === 'string' && data.answer) ||
-        (typeof data?.response === 'string' && data.response) ||
-        (typeof data?.message === 'string' && data.message) ||
-        null;
-
-      return { answer: answer?.trim() || null, endpointFailed: false };
-    } catch {
-      return { answer: null, endpointFailed: true };
+    } else {
+      endpointFailed = true;
     }
+
+    if (GEMINI_API_KEY) {
+      try {
+        const geminiPrompt = [
+          `Question: ${question}`,
+          'App context:',
+          JSON.stringify(payload.appContext, null, 2),
+          'Recent conversation:',
+          JSON.stringify(payload.recentConversation, null, 2),
+        ].join('\n\n');
+
+        const geminiRes = await fetch(
+          `${GEMINI_API_BASE}/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: {
+                role: 'system',
+                parts: [{
+                  text: [
+                    'You are EstatePerks AI Chat Assist.',
+                    'The user can ask any question.',
+                    'Answer clearly and concisely.',
+                    'For real-estate queries, give practical next steps for India.',
+                    'If uncertain, say what details are needed next.',
+                  ].join('\n'),
+                }],
+              },
+              contents: [{
+                role: 'user',
+                parts: [{ text: geminiPrompt }],
+              }],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 520,
+                topP: 0.9,
+              },
+            }),
+          }
+        );
+
+        if (geminiRes.ok) {
+          const data = await geminiRes.json() as any;
+          const parts = (data?.candidates?.[0]?.content?.parts ?? []) as { text?: string }[];
+          const answer = parts
+            .map((part) => (typeof part?.text === 'string' ? part.text.trim() : ''))
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+
+          if (answer) {
+            return { answer, endpointFailed: false };
+          }
+        }
+      } catch {
+        // Ignore and use local instant fallback below.
+      }
+    }
+
+    return { answer: null, endpointFailed };
   }, [
     comparePropertyIds.length,
     savedPropertyIds.length,
@@ -276,7 +344,7 @@ export default function HomeScreen() {
     const q = question.toLowerCase();
 
     if (/(hello|hi|hey|namaste)/.test(q)) {
-      return 'Hi! I can help with visits, loan checks, price guidance, and finding better matches. What do you want to do first?';
+      return 'Hi! I can usually answer any topic. If you need property help, I can guide visits, loan prep, price checks, and shortlisting.';
     }
 
     if (/(book|schedule|visit|tour|site visit)/.test(q)) {
@@ -295,7 +363,7 @@ export default function HomeScreen() {
       return 'You can connect with an agent from any property details page. Share budget, preferred locality, and move-in timeline to get better recommendations quickly.';
     }
 
-    return 'I can help with booking visits, EMI/loan checks, locality comparisons, and shortlisting. Ask a focused question and I will give step-by-step guidance.';
+    return 'Live AI is temporarily unavailable, so instant mode is limited. Please retry in a moment for full answers on any topic.';
   }, [selectedCity, selectedIntent]);
 
   const handleSendMessage = useCallback(async (text?: string) => {
@@ -318,7 +386,7 @@ export default function HomeScreen() {
       const aiMessage = answer || getFallbackSupportReply(messageText);
 
       if (endpointFailed) {
-        setChatStatusMessage('Live AI endpoint is unavailable right now. Showing instant support guidance.');
+        setChatStatusMessage('Live AI endpoint is unavailable right now. Instant mode is limited until reconnection.');
       }
 
       const aiMsg: ChatMessage = {

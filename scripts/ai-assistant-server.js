@@ -27,6 +27,9 @@ function loadDotEnv(filePath) {
 loadDotEnv(path.join(process.cwd(), '.env'));
 
 const PORT = Number(process.env.AI_ASSISTANT_PORT || 8787);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_API_BASE = (process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_API_BASE = (process.env.OPENAI_API_BASE || 'https://api.openai.com/v1').replace(/\/$/, '');
@@ -134,11 +137,21 @@ function extractTextFromResponsesApi(data) {
   return chunks.join('\n').trim();
 }
 
-async function generateAssistantAnswer(payload) {
-  if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is missing in .env');
+function extractTextFromGemini(data) {
+  const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+  const chunks = [];
+  for (const candidate of candidates) {
+    const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+    for (const part of parts) {
+      if (typeof part?.text === 'string' && part.text.trim()) {
+        chunks.push(part.text.trim());
+      }
+    }
   }
+  return chunks.join('\n').trim();
+}
 
+function buildAssistantPrompts(payload) {
   const question = String(payload?.question || '').trim();
   if (!question) {
     throw new Error('Question is required');
@@ -154,16 +167,17 @@ async function generateAssistantAnswer(payload) {
 
   const systemPrompt = assistantMode === 'support'
     ? [
-        'You are EstatePerks AI Support, a practical assistant similar to Gemini.',
+        'You are EstatePerks AI Chat Assist powered by Gemini.',
         'Rules:',
-        '- Answer in a helpful, conversational tone with concise structure.',
-        '- Give actionable next steps for real-estate user tasks in India.',
-        '- Use app context and conversation; do not invent unavailable actions.',
-        '- If details are missing, state what to provide next.',
-        '- Keep response concise (4-8 lines).',
+        '- The user can ask about any topic; answer clearly and directly.',
+        '- If the user asks real-estate questions, add practical India-focused next steps.',
+        '- Use app context when relevant; do not invent unavailable product actions.',
+        '- For medical, legal, and financial advice, include a short caution.',
+        '- If details are missing, ask exactly what is needed next.',
+        '- Keep responses concise and structured.',
       ].join('\n')
     : [
-        'You are an AI Property Assistant for an Indian real-estate app.',
+      'You are an AI Property Assistant for an Indian real-estate app.',
         'Rules:',
         '- Ground every answer in provided property data and metrics.',
         '- Be practical and specific. Mention trade-offs, not hype.',
@@ -189,6 +203,57 @@ async function generateAssistantAnswer(payload) {
         'Recent conversation:',
         compactJson(recentConversation),
       ].join('\n\n');
+
+  return { systemPrompt, userPrompt };
+}
+
+async function generateWithGemini(systemPrompt, userPrompt) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is missing in .env');
+  }
+
+  const endpoint = `${GEMINI_API_BASE}/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: systemPrompt }],
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: userPrompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 520,
+        topP: 0.9,
+      },
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const errText = data?.error?.message || `Gemini error ${response.status}`;
+    throw new Error(errText);
+  }
+
+  const answer = extractTextFromGemini(data);
+  if (!answer) {
+    throw new Error('Gemini returned an empty response');
+  }
+  return answer;
+}
+
+async function generateWithOpenAI(systemPrompt, userPrompt) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is missing in .env');
+  }
 
   const response = await fetch(`${OPENAI_API_BASE}/responses`, {
     method: 'POST',
@@ -220,6 +285,19 @@ async function generateAssistantAnswer(payload) {
   return answer;
 }
 
+async function generateAssistantAnswer(payload) {
+  const { systemPrompt, userPrompt } = buildAssistantPrompts(payload);
+
+  if (GEMINI_API_KEY) {
+    return generateWithGemini(systemPrompt, userPrompt);
+  }
+  if (OPENAI_API_KEY) {
+    return generateWithOpenAI(systemPrompt, userPrompt);
+  }
+
+  throw new Error('Missing AI credentials. Set GEMINI_API_KEY (recommended) or OPENAI_API_KEY in .env');
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -232,7 +310,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    writeJson(res, 200, { ok: true, model: OPENAI_MODEL });
+    writeJson(res, 200, {
+      ok: true,
+      provider: GEMINI_API_KEY ? 'gemini' : (OPENAI_API_KEY ? 'openai' : 'none'),
+      model: GEMINI_API_KEY ? GEMINI_MODEL : OPENAI_MODEL,
+    });
     return;
   }
 
@@ -275,8 +357,13 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`[ai-server] Listening on http://0.0.0.0:${PORT}`);
   console.log(`[ai-server] Endpoint: POST /api/ai-assistant`);
   console.log(`[ai-server] Endpoint: POST /api/newsletter/subscribe`);
-  if (!OPENAI_API_KEY) {
-    console.log('[ai-server] OPENAI_API_KEY is missing. Add it in .env');
+  if (GEMINI_API_KEY) {
+    console.log(`[ai-server] AI provider: Gemini (${GEMINI_MODEL})`);
+  } else if (OPENAI_API_KEY) {
+    console.log(`[ai-server] AI provider: OpenAI (${OPENAI_MODEL})`);
+    console.log('[ai-server] Tip: set GEMINI_API_KEY to use Gemini for chat assist.');
+  } else {
+    console.log('[ai-server] No AI key found. Add GEMINI_API_KEY (recommended) or OPENAI_API_KEY in .env');
   }
   if (!RESEND_API_KEY) {
     console.log('[ai-server] RESEND_API_KEY is missing. Newsletter emails are disabled.');

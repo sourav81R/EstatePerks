@@ -154,6 +154,13 @@ interface Property {
 }
 
 type PropertyListItem = Property & { id: string };
+type ChatSender = 'ai' | 'user';
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  sender: ChatSender;
+}
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
@@ -174,6 +181,9 @@ const RECENT_VIEWS_STORAGE_KEY = 'estateperks:recentViews:v1';
 const CALLBACK_LEADS_STORAGE_KEY = 'estateperks:callbackLeads:v1';
 const RECENT_VIEW_LIMIT = 8;
 const AI_ASSISTANT_ENDPOINT = process.env.EXPO_PUBLIC_AI_ASSISTANT_ENDPOINT;
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_API_BASE = (process.env.EXPO_PUBLIC_GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
 const DEFAULT_VIDEO_PLACEHOLDER =
   'https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/property-tour-living-room.mp4';
 const RELIABLE_VIDEO_FALLBACKS = [
@@ -263,6 +273,7 @@ export default function PropertyDetails() {
   const [showControls, setShowControls] = useState(true);
   const [doubleTapSide, setDoubleTapSide] = useState<'left' | 'right' | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webSpeechRecognitionRef = useRef<any>(null);
 
   // Pulse Animation for Virtual Tour Label
   const pulseOpacity = useSharedValue(1);
@@ -420,13 +431,15 @@ export default function PropertyDetails() {
   const [isTrustModalVisible, setIsTrustModalVisible] = useState(false);
   const [isAIChatVisible, setIsAIChatVisible] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const [chatMessages, setChatMessages] = useState([
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      text: `Hi! I'm your AI assistant for ${property.name}. Ask me about price fairness, EMI, investment potential, family suitability, locality, amenities, possession, or builder trust.`,
+      text: `Hi! I'm your AI assistant for ${property.name}. Ask me anything. I can help with this property's pricing, EMI, locality, trust checks, and also general questions.`,
       sender: 'ai'
     }
   ]);
+  const [isChatResponding, setIsChatResponding] = useState(false);
+  const [chatStatusMessage, setChatStatusMessage] = useState<string | null>(null);
   const [lastAIIntent, setLastAIIntent] = useState<string | null>(null);
   const [visitStatus, setVisitStatus] = useState<'none' | 'scheduled' | 'completed'>('none');
   const [isFeedbackModalVisible, setIsFeedbackModalVisible] = useState(false);
@@ -509,10 +522,11 @@ export default function PropertyDetails() {
     setChatMessages([
       {
         id: '1',
-        text: `Hi! I'm your AI assistant for ${property.name}. Ask me about price fairness, EMI, investment potential, family suitability, locality, amenities, possession, or builder trust.`,
+        text: `Hi! I'm your AI assistant for ${property.name}. Ask me anything. I can help with this property's pricing, EMI, locality, trust checks, and also general questions.`,
         sender: 'ai'
       }
     ]);
+    setChatStatusMessage(null);
     setLastAIIntent(null);
     setRecentViewIds((prev) => {
       const next = [resolvedPropertyId, ...prev.filter((id) => id !== resolvedPropertyId)];
@@ -523,6 +537,16 @@ export default function PropertyDetails() {
   useEffect(() => {
     setIsFavorited(favoritePropertyIds.includes(resolvedPropertyId));
   }, [favoritePropertyIds, resolvedPropertyId]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        webSpeechRecognitionRef.current?.stop?.();
+      } catch {
+        // Ignore cleanup failures.
+      }
+    };
+  }, []);
 
   const lastTapRef = useRef<{ time: number; side: 'left' | 'right' | null }>({ time: 0, side: null });
   const videoViewRef = useRef<VideoView | null>(null);
@@ -1148,8 +1172,17 @@ export default function PropertyDetails() {
   }, [property.amenities]);
 
   const classifyChatIntent = (query: string) => {
-    const text = query.toLowerCase();
-    const includesAny = (terms: string[]) => terms.some((term) => text.includes(term));
+    const text = query.toLowerCase().replace(/\s+/g, ' ').trim();
+    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hasTerm = (term: string) => {
+      const normalizedTerm = term.toLowerCase().trim();
+      if (!normalizedTerm) return false;
+      if (normalizedTerm.includes(' ')) {
+        return text.includes(normalizedTerm);
+      }
+      return new RegExp(`\\b${escapeRegExp(normalizedTerm)}\\b`, 'i').test(text);
+    };
+    const includesAny = (terms: string[]) => terms.some((term) => hasTerm(term));
 
     if (includesAny(['hi', 'hello', 'hey', 'good morning', 'good evening'])) return 'greeting';
     if (includesAny(['family', 'kids', 'children', 'school', 'safe'])) return 'family';
@@ -1165,180 +1198,269 @@ export default function PropertyDetails() {
     return 'general';
   };
 
-  const requestRemoteAIResponse = async (question: string): Promise<string | null> => {
-    if (!AI_ASSISTANT_ENDPOINT) return null;
+  const requestRemoteAIResponse = async (
+    question: string,
+    conversation: ChatMessage[]
+  ): Promise<{ answer: string | null; endpointFailed: boolean }> => {
+    const payload = {
+      assistantMode: 'property',
+      question,
+      property: {
+        id: resolvedPropertyId,
+        name: property.name,
+        location: property.location,
+        price: property.price,
+        type: property.type,
+        beds: property.beds,
+        baths: property.baths,
+        sqft: property.sqft,
+        status: property.status,
+        possession: property.possession,
+        builder: property.builder,
+        reraId: property.reraId,
+        localityScores: property.localityScores,
+        amenities: property.amenities,
+        connectivity: property.connectivity,
+        localityInsights: property.localityInsights,
+        localitySentiment: property.localitySentiment,
+      },
+      metrics: {
+        trustScore,
+        rentalYieldPercent,
+        fiveYearROI,
+        estimatedMonthlyPayment,
+        priceFairness,
+        affordabilitySummary,
+      },
+      recentConversation: conversation.slice(-8).map((msg) => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text,
+      })),
+    };
 
-    try {
-      const payload = {
-        question,
-        property: {
-          id: resolvedPropertyId,
-          name: property.name,
-          location: property.location,
-          price: property.price,
-          type: property.type,
-          beds: property.beds,
-          baths: property.baths,
-          sqft: property.sqft,
-          status: property.status,
-          possession: property.possession,
-          builder: property.builder,
-          reraId: property.reraId,
-          localityScores: property.localityScores,
-          amenities: property.amenities,
-          connectivity: property.connectivity,
-          localityInsights: property.localityInsights,
-          localitySentiment: property.localitySentiment,
-        },
-        metrics: {
-          trustScore,
-          rentalYieldPercent,
-          fiveYearROI,
-          estimatedMonthlyPayment,
-          priceFairness,
-          affordabilitySummary,
-        },
-        recentConversation: chatMessages.slice(-8).map((msg) => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.text,
-        })),
-      };
+    let endpointFailed = false;
 
-      const res = await fetch(AI_ASSISTANT_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    if (AI_ASSISTANT_ENDPOINT) {
+      try {
+        const res = await fetch(AI_ASSISTANT_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      if (!res.ok) return null;
-      const data = await res.json();
-      const answer =
-        (typeof data?.answer === 'string' && data.answer) ||
-        (typeof data?.response === 'string' && data.response) ||
-        (typeof data?.message === 'string' && data.message) ||
-        null;
+        if (res.ok) {
+          const data = await res.json();
+          const answer =
+            (typeof data?.answer === 'string' && data.answer) ||
+            (typeof data?.response === 'string' && data.response) ||
+            (typeof data?.message === 'string' && data.message) ||
+            null;
 
-      return answer?.trim() || null;
-    } catch {
-      return null;
+          if (answer?.trim()) {
+            return { answer: answer.trim(), endpointFailed: false };
+          }
+        } else {
+          endpointFailed = true;
+        }
+      } catch {
+        endpointFailed = true;
+      }
+    } else {
+      endpointFailed = true;
     }
+
+    if (GEMINI_API_KEY) {
+      try {
+        const geminiPrompt = [
+          `Question: ${question}`,
+          'Property data:',
+          JSON.stringify(payload.property, null, 2),
+          'Calculated metrics:',
+          JSON.stringify(payload.metrics, null, 2),
+          'Recent conversation:',
+          JSON.stringify(payload.recentConversation, null, 2),
+        ].join('\n\n');
+
+        const geminiRes = await fetch(
+          `${GEMINI_API_BASE}/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: {
+                role: 'system',
+                parts: [{
+                  text: [
+                    'You are EstatePerks AI Property Assistant.',
+                    'If the user asks about this property, use provided property data and metrics.',
+                    'If user asks general questions, answer clearly and concisely.',
+                    'Do not invent property facts that are not provided.',
+                    'When uncertain, state what details should be verified next.',
+                  ].join('\n'),
+                }],
+              },
+              contents: [{
+                role: 'user',
+                parts: [{ text: geminiPrompt }],
+              }],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 520,
+                topP: 0.9,
+              },
+            }),
+          }
+        );
+
+        if (geminiRes.ok) {
+          const data = await geminiRes.json() as {
+            candidates?: { content?: { parts?: { text?: string }[] } }[];
+          };
+          const parts = (data?.candidates?.[0]?.content?.parts ?? []) as { text?: string }[];
+          const answer = parts
+            .map((part) => (typeof part?.text === 'string' ? part.text.trim() : ''))
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+
+          if (answer) {
+            return { answer, endpointFailed: false };
+          }
+        }
+      } catch {
+        // Ignore and use instant fallback below.
+      }
+    }
+
+    return { answer: null, endpointFailed };
   };
 
-  const handleAIChat = (input?: any) => {
+  const handleAIChat = (input?: string) => {
     const message = typeof input === 'string' ? input : chatInput;
-    if (!message.trim()) return;
+    if (!message.trim() || isChatResponding) return;
 
-    const userMsg = { id: Date.now().toString(), text: message, sender: 'user' };
-    setChatMessages((prev) => [...prev, userMsg]);
     const currentInput = message.trim();
+    const userMsg: ChatMessage = { id: Date.now().toString(), text: currentInput, sender: 'user' };
+    const conversation = [...chatMessages, userMsg];
+    setChatMessages((prev) => [...prev, userMsg]);
     if (typeof input !== 'string') setChatInput('');
+    setChatStatusMessage(null);
+    setIsChatResponding(true);
 
     setTimeout(async () => {
-      const remoteAnswer = await requestRemoteAIResponse(currentInput);
-      if (remoteAnswer) {
-        const aiMsg = { id: (Date.now() + 1).toString(), text: remoteAnswer, sender: 'ai' };
-        setLastAIIntent('remote_ai');
-        setChatMessages((prev) => [...prev, aiMsg]);
-        return;
-      }
-
-      const detectedIntent = classifyChatIntent(currentInput);
-      const intent = detectedIntent === 'general' && /why|how|explain|more|detail/.test(currentInput.toLowerCase()) && lastAIIntent
-        ? lastAIIntent
-        : detectedIntent;
-      setLastAIIntent(intent);
-
-      const safetyScore = property.localityScores?.find((s) => s.label === 'Safety')?.score;
-      const connectivityScore = property.localityScores?.find((s) => s.label === 'Connectivity')?.score;
-      const lifestyleScore = property.localityScores?.find((s) => s.label === 'Lifestyle')?.score;
-      const topSchools = (property.connectivity || []).filter((item) => item.type === 'school').slice(0, 2);
-      const topHospitals = (property.connectivity || []).filter((item) => item.type === 'hospital').slice(0, 2);
-      const moveInReady =
-        String(property.status || '').toLowerCase().includes('ready') ||
-        String(property.possession || '').toLowerCase().includes('immediate');
-      const bestBank = bankEMIs
-        .map((bank) => ({ ...bank, numericEmi: parseInt(String(bank.emi).replace(/[^\d]/g, ''), 10) || Number.MAX_SAFE_INTEGER }))
-        .sort((a, b) => a.numericEmi - b.numericEmi)[0];
-
-      let response = '';
-
-      if (intent === 'greeting') {
-        response = `Hi! I can help with ${property.name}'s price analysis, EMI, investment outlook, locality quality, amenities, and trust factors. What would you like to evaluate first?`;
-      } else if (intent === 'family') {
-        const familyAmenityHint = amenityHighlights.filter((item) =>
-          /kids|play|park|security|school|garden/i.test(item)
-        ).slice(0, 3);
-        const familyVerdict =
-          (safetyScore || 0) >= 8
-            ? 'This looks like a strong family-friendly option.'
-            : (safetyScore || 0) >= 6
-            ? 'This can work for families, with a few trade-offs.'
-            : 'I would evaluate this carefully for family usage.';
-
-        response = `${familyVerdict} Safety score is ${safetyScore ?? 'N/A'}/10 and connectivity is ${connectivityScore ?? 'N/A'}/10.` +
-          `${topSchools.length ? ` Nearby schools: ${topSchools.map((s) => `${s.name} (${s.distance})`).join(', ')}.` : ''}` +
-          `${familyAmenityHint.length ? ` Family-relevant amenities include ${familyAmenityHint.join(', ')}.` : ''}`;
-      } else if (intent === 'price') {
-        if (!priceFairness) {
-          response = `Listed price is ${property.price}. I don't have reliable locality benchmark data for exact fair-value scoring, but I can estimate EMI and investment return if you share your budget and down payment.`;
-        } else if (priceFairness.isFair) {
-          response = `Price looks attractive. ${property.name} is around INR ${priceFairness.diff}/sqft (${priceFairness.percent}%) below the locality benchmark, while offering ${property.type} specs (${property.beds} bed, ${property.baths} bath, ${property.sqft} sqft).`;
-        } else {
-          response = `Price is premium by about ${priceFairness.percent}% vs locality average. It may still be justified if builder trust, location access, and amenity depth are your top priorities.`;
+      try {
+        const { answer, endpointFailed } = await requestRemoteAIResponse(currentInput, conversation);
+        if (answer) {
+          const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: answer, sender: 'ai' };
+          setLastAIIntent('remote_ai');
+          setChatMessages((prev) => [...prev, aiMsg]);
+          return;
         }
-      } else if (intent === 'emi') {
-        response = `Estimated EMI is INR ${estimatedMonthlyPayment}/month with current assumptions. Affordability status is ${affordabilitySummary.label}` +
-          `${affordabilitySummary.ratio !== null ? ` (${affordabilitySummary.ratio.toFixed(1)}% of monthly income).` : '.'}` +
-          `${bestBank ? ` Lowest EMI in our bank panel is ${bestBank.name}: INR ${bestBank.emi}.` : ''} ${affordabilitySummary.recommendation}`;
-      } else if (intent === 'investment') {
-        const insightText = property.aiInsights?.summary ? ` ${property.aiInsights.summary}` : '';
-        response = `Investment snapshot: rental yield is ${rentalYieldPercent}% and estimated 5-year total ROI is ${fiveYearROI}%.` +
-          `${property.localityInsights?.length ? ` Locality trend: ${property.localityInsights.map((i) => `${i.label} ${i.value}`).join(', ')}.` : ''}` +
-          insightText;
-      } else if (intent === 'locality') {
-        const commuteLine = commuteInsights
-          .slice(0, 3)
-          .map((item) => `${item.name} (${item.distance}, ~${item.etaMinutes} min by ${commuteMode.toLowerCase()})`)
-          .join('; ');
 
-        response = `${property.location} has locality scores of Safety ${safetyScore ?? 'N/A'}/10, Connectivity ${connectivityScore ?? 'N/A'}/10, and Lifestyle ${lifestyleScore ?? 'N/A'}/10.` +
-          `${commuteLine ? ` Quick access points: ${commuteLine}.` : ''}` +
-          `${topHospitals.length ? ` Nearby hospitals: ${topHospitals.map((h) => `${h.name} (${h.distance})`).join(', ')}.` : ''}`;
-      } else if (intent === 'amenities') {
-        const categorySummary = property.amenities
-          ? Object.keys(property.amenities)
-              .slice(0, 3)
-              .map((cat) => `${cat}: ${property.amenities?.[cat]?.slice(0, 3).join(', ')}`)
-              .join(' | ')
-          : '';
-        response = categorySummary
-          ? `Top amenities for ${property.name}: ${categorySummary}.`
-          : `Core highlights include ${property.features?.map((f) => f.label).slice(0, 4).join(', ') || 'modern lifestyle amenities'}.`;
-      } else if (intent === 'trust') {
-        response = `Trust snapshot: Builder is ${property.builder}${property.builderExperience ? ` (${property.builderExperience})` : ''}.` +
-          `${property.totalProjects ? ` Delivered projects: ${property.totalProjects}.` : ''}` +
-          ` RERA ID: ${property.reraId}. Internal trust score is ${trustScore}/100 (${trustLevel.label}).`;
-      } else if (intent === 'possession') {
-        response = `${property.status} project with possession target: ${property.possession}.` +
-          `${moveInReady ? ' This is suitable for near-immediate move-in.' : ' This is better for planned move-in and phased payment buyers.'}` +
-          `${property.timeline?.length ? ` Timeline milestones: ${property.timeline.slice(0, 3).map((t) => `${t.date} - ${t.label}`).join('; ')}.` : ''}`;
-      } else if (intent === 'risks') {
-        const riskList = property.localitySentiment?.cons?.length
-          ? property.localitySentiment.cons.slice(0, 3).join(', ')
-          : 'premium maintenance outgo and possible peak-hour traffic';
-        response = `Key risks to consider: ${riskList}.` +
-          `${!priceFairness ? '' : priceFairness.isFair ? ' Pricing risk is relatively controlled versus locality averages.' : ' Pricing is on the premium side, so negotiation is important.'}` +
-          ` I can help you with a negotiation-ready checklist if needed.`;
-      } else if (intent === 'next_step') {
-        response = `Best next step is a site visit plus a document check. If you want, I can suggest a focused checklist for visit points, legal checks, and price negotiation before you talk to the agent.`;
-      } else {
-        response = `Here's a quick summary for ${property.name}: ${property.type} in ${property.location}, priced at ${property.price}, trust ${trustScore}/100, rental yield ${rentalYieldPercent}%, and estimated EMI INR ${estimatedMonthlyPayment}/month.` +
-          ` Ask me a focused question like "Is this good for families?", "Is price fair?", or "What's the investment potential?"`;
+        if (endpointFailed) {
+          setChatStatusMessage('Live AI endpoint is unavailable right now. Showing instant property guidance.');
+        }
+
+        const detectedIntent = classifyChatIntent(currentInput);
+        const intent = detectedIntent === 'general' && /why|how|explain|more|detail/.test(currentInput.toLowerCase()) && lastAIIntent
+          ? lastAIIntent
+          : detectedIntent;
+        setLastAIIntent(intent);
+
+        const safetyScore = property.localityScores?.find((s) => s.label === 'Safety')?.score;
+        const connectivityScore = property.localityScores?.find((s) => s.label === 'Connectivity')?.score;
+        const lifestyleScore = property.localityScores?.find((s) => s.label === 'Lifestyle')?.score;
+        const topSchools = (property.connectivity || []).filter((item) => item.type === 'school').slice(0, 2);
+        const topHospitals = (property.connectivity || []).filter((item) => item.type === 'hospital').slice(0, 2);
+        const moveInReady =
+          String(property.status || '').toLowerCase().includes('ready') ||
+          String(property.possession || '').toLowerCase().includes('immediate');
+        const bestBank = bankEMIs
+          .map((bank) => ({ ...bank, numericEmi: parseInt(String(bank.emi).replace(/[^\d]/g, ''), 10) || Number.MAX_SAFE_INTEGER }))
+          .sort((a, b) => a.numericEmi - b.numericEmi)[0];
+
+        let response = '';
+
+        if (intent === 'greeting') {
+          response = `Hi! I can help with ${property.name}'s price analysis, EMI, investment outlook, locality quality, amenities, and trust factors. What would you like to evaluate first?`;
+        } else if (intent === 'family') {
+          const familyAmenityHint = amenityHighlights.filter((item) =>
+            /kids|play|park|security|school|garden/i.test(item)
+          ).slice(0, 3);
+          const familyVerdict =
+            (safetyScore || 0) >= 8
+              ? 'This looks like a strong family-friendly option.'
+              : (safetyScore || 0) >= 6
+              ? 'This can work for families, with a few trade-offs.'
+              : 'I would evaluate this carefully for family usage.';
+
+          response = `${familyVerdict} Safety score is ${safetyScore ?? 'N/A'}/10 and connectivity is ${connectivityScore ?? 'N/A'}/10.` +
+            `${topSchools.length ? ` Nearby schools: ${topSchools.map((s) => `${s.name} (${s.distance})`).join(', ')}.` : ''}` +
+            `${familyAmenityHint.length ? ` Family-relevant amenities include ${familyAmenityHint.join(', ')}.` : ''}`;
+        } else if (intent === 'price') {
+          if (!priceFairness) {
+            response = `Listed price is ${property.price}. I don't have reliable locality benchmark data for exact fair-value scoring, but I can estimate EMI and investment return if you share your budget and down payment.`;
+          } else if (priceFairness.isFair) {
+            response = `Price looks attractive. ${property.name} is around INR ${priceFairness.diff}/sqft (${priceFairness.percent}%) below the locality benchmark, while offering ${property.type} specs (${property.beds} bed, ${property.baths} bath, ${property.sqft} sqft).`;
+          } else {
+            response = `Price is premium by about ${priceFairness.percent}% vs locality average. It may still be justified if builder trust, location access, and amenity depth are your top priorities.`;
+          }
+        } else if (intent === 'emi') {
+          response = `Estimated EMI is INR ${estimatedMonthlyPayment}/month with current assumptions. Affordability status is ${affordabilitySummary.label}` +
+            `${affordabilitySummary.ratio !== null ? ` (${affordabilitySummary.ratio.toFixed(1)}% of monthly income).` : '.'}` +
+            `${bestBank ? ` Lowest EMI in our bank panel is ${bestBank.name}: INR ${bestBank.emi}.` : ''} ${affordabilitySummary.recommendation}`;
+        } else if (intent === 'investment') {
+          const insightText = property.aiInsights?.summary ? ` ${property.aiInsights.summary}` : '';
+          response = `Investment snapshot: rental yield is ${rentalYieldPercent}% and estimated 5-year total ROI is ${fiveYearROI}%.` +
+            `${property.localityInsights?.length ? ` Locality trend: ${property.localityInsights.map((i) => `${i.label} ${i.value}`).join(', ')}.` : ''}` +
+            insightText;
+        } else if (intent === 'locality') {
+          const commuteLine = commuteInsights
+            .slice(0, 3)
+            .map((item) => `${item.name} (${item.distance}, ~${item.etaMinutes} min by ${commuteMode.toLowerCase()})`)
+            .join('; ');
+
+          response = `${property.location} has locality scores of Safety ${safetyScore ?? 'N/A'}/10, Connectivity ${connectivityScore ?? 'N/A'}/10, and Lifestyle ${lifestyleScore ?? 'N/A'}/10.` +
+            `${commuteLine ? ` Quick access points: ${commuteLine}.` : ''}` +
+            `${topHospitals.length ? ` Nearby hospitals: ${topHospitals.map((h) => `${h.name} (${h.distance})`).join(', ')}.` : ''}`;
+        } else if (intent === 'amenities') {
+          const categorySummary = property.amenities
+            ? Object.keys(property.amenities)
+                .slice(0, 3)
+                .map((cat) => `${cat}: ${property.amenities?.[cat]?.slice(0, 3).join(', ')}`)
+                .join(' | ')
+            : '';
+          response = categorySummary
+            ? `Top amenities for ${property.name}: ${categorySummary}.`
+            : `Core highlights include ${property.features?.map((f) => f.label).slice(0, 4).join(', ') || 'modern lifestyle amenities'}.`;
+        } else if (intent === 'trust') {
+          response = `Trust snapshot: Builder is ${property.builder}${property.builderExperience ? ` (${property.builderExperience})` : ''}.` +
+            `${property.totalProjects ? ` Delivered projects: ${property.totalProjects}.` : ''}` +
+            ` RERA ID: ${property.reraId}. Internal trust score is ${trustScore}/100 (${trustLevel.label}).`;
+        } else if (intent === 'possession') {
+          response = `${property.status} project with possession target: ${property.possession}.` +
+            `${moveInReady ? ' This is suitable for near-immediate move-in.' : ' This is better for planned move-in and phased payment buyers.'}` +
+            `${property.timeline?.length ? ` Timeline milestones: ${property.timeline.slice(0, 3).map((t) => `${t.date} - ${t.label}`).join('; ')}.` : ''}`;
+        } else if (intent === 'risks') {
+          const riskList = property.localitySentiment?.cons?.length
+            ? property.localitySentiment.cons.slice(0, 3).join(', ')
+            : 'premium maintenance outgo and possible peak-hour traffic';
+          response = `Key risks to consider: ${riskList}.` +
+            `${!priceFairness ? '' : priceFairness.isFair ? ' Pricing risk is relatively controlled versus locality averages.' : ' Pricing is on the premium side, so negotiation is important.'}` +
+            ` I can help you with a negotiation-ready checklist if needed.`;
+        } else if (intent === 'next_step') {
+          response = 'Best next step is a site visit plus a document check. If you want, I can suggest a focused checklist for visit points, legal checks, and price negotiation before you talk to the agent.';
+        } else {
+          response = `Here's a quick summary for ${property.name}: ${property.type} in ${property.location}, priced at ${property.price}, trust ${trustScore}/100, rental yield ${rentalYieldPercent}%, and estimated EMI INR ${estimatedMonthlyPayment}/month.` +
+            ' Ask me a focused question like "Is this good for families?", "Is price fair?", or "What\'s the investment potential?"';
+        }
+
+        const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: response, sender: 'ai' };
+        setChatMessages((prev) => [...prev, aiMsg]);
+      } finally {
+        setIsChatResponding(false);
       }
-
-      const aiMsg = { id: (Date.now() + 1).toString(), text: response, sender: 'ai' };
-      setChatMessages((prev) => [...prev, aiMsg]);
-    }, 450);
+    }, 350);
   };
 
   const handleScheduleVisit = () => {
@@ -1360,16 +1482,61 @@ export default function PropertyDetails() {
   };
 
   const toggleVoiceSearch = () => {
-    if (!isRecording) {
-      setIsRecording(true);
-      // Mock voice recognition for hands-free inquiry
-      setTimeout(() => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Voice Input Unavailable', 'Voice input is currently supported on web in this build.');
+      return;
+    }
+
+    const SpeechRecognitionCtor =
+      (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      Alert.alert('Voice Input Unsupported', 'Your browser does not support speech recognition.');
+      return;
+    }
+
+    if (isRecording) {
+      try {
+        webSpeechRecognitionRef.current?.stop?.();
+      } catch {
+        // Ignore stop errors.
+      } finally {
         setIsRecording(false);
-        const mockRecognizedText = "Is this property good for families?";
-        handleAIChat(mockRecognizedText);
-      }, 3000);
-    } else {
+      }
+      return;
+    }
+
+    try {
+      setChatStatusMessage(null);
+      const recognition = new SpeechRecognitionCtor();
+      recognition.lang = 'en-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = false;
+
+      recognition.onresult = (event: any) => {
+        const transcript = String(event?.results?.[0]?.[0]?.transcript || '').trim();
+        if (transcript) {
+          handleAIChat(transcript);
+        }
+      };
+
+      recognition.onerror = () => {
+        setChatStatusMessage('Voice recognition failed. Please try again.');
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        webSpeechRecognitionRef.current = null;
+      };
+
+      webSpeechRecognitionRef.current = recognition;
+      setIsRecording(true);
+      recognition.start();
+    } catch {
       setIsRecording(false);
+      Alert.alert('Voice Input Error', 'Unable to start voice recognition.');
     }
   };
 
@@ -3662,12 +3829,20 @@ export default function PropertyDetails() {
                   <Text style={[styles.chatText, msg.sender === 'user' ? styles.userChatText : styles.aiChatText]}>{msg.text}</Text>
                 </View>
               ))}
+              {isChatResponding ? (
+                <View style={[styles.chatBubble, styles.aiBubble, styles.typingBubble]}>
+                  <Text style={[styles.chatText, styles.aiChatText, styles.typingText]}>Typing...</Text>
+                </View>
+              ) : null}
             </ScrollView>
+
+            {chatStatusMessage ? <Text style={styles.chatStatusText}>{chatStatusMessage}</Text> : null}
 
             <View style={styles.chatInputContainer}>
               <TouchableOpacity 
                 style={[styles.voiceSearchBtn, isRecording && styles.voiceSearchBtnActive]}
                 onPress={toggleVoiceSearch}
+                disabled={isChatResponding}
               >
                 <Animated.View style={isRecording ? pulseAnimatedStyle : null}>
                   <Ionicons name={isRecording ? "mic" : "mic-outline"} size={20} color={isRecording ? "#fff" : "#22d3ee"} />
@@ -3677,13 +3852,15 @@ export default function PropertyDetails() {
                 style={styles.chatInput}
                 value={chatInput}
                 onChangeText={setChatInput}
-                placeholder={isRecording ? "Listening..." : "Ask about locality, price, or family suitability..."}
+                placeholder={isRecording ? "Listening..." : "Ask anything about this property or any general topic..."}
                 placeholderTextColor="#475569"
                 onSubmitEditing={handleAIChat}
+                editable={!isChatResponding}
               />
               <TouchableOpacity 
-                style={styles.chatSendBtn}
+                style={[styles.chatSendBtn, isChatResponding && styles.chatSendBtnDisabled]}
                 onPress={handleAIChat}
+                disabled={isChatResponding}
               >
                 <Ionicons name="send" size={20} color="#020617" />
               </TouchableOpacity>
