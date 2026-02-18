@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as Speech from 'expo-speech';
 import { LineChart } from 'react-native-gifted-charts';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gyroscope } from 'expo-sensors';
@@ -440,6 +441,8 @@ export default function PropertyDetails() {
   ]);
   const [isChatResponding, setIsChatResponding] = useState(false);
   const [chatStatusMessage, setChatStatusMessage] = useState<string | null>(null);
+  const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [lastAIIntent, setLastAIIntent] = useState<string | null>(null);
   const [visitStatus, setVisitStatus] = useState<'none' | 'scheduled' | 'completed'>('none');
   const [isFeedbackModalVisible, setIsFeedbackModalVisible] = useState(false);
@@ -526,6 +529,8 @@ export default function PropertyDetails() {
         sender: 'ai'
       }
     ]);
+    setIsSpeechEnabled(true);
+    setSpeakingMessageId(null);
     setChatStatusMessage(null);
     setLastAIIntent(null);
     setRecentViewIds((prev) => {
@@ -542,6 +547,11 @@ export default function PropertyDetails() {
     return () => {
       try {
         webSpeechRecognitionRef.current?.stop?.();
+      } catch {
+        // Ignore cleanup failures.
+      }
+      try {
+        Speech.stop();
       } catch {
         // Ignore cleanup failures.
       }
@@ -1198,6 +1208,54 @@ export default function PropertyDetails() {
     return 'general';
   };
 
+  const normalizeAssistantText = useCallback((value: string) => {
+    return String(value || '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/^\s*[*-]\s+/gm, '• ')
+      .trim();
+  }, []);
+
+  const speakAssistantMessage = useCallback((text: string, messageId?: string) => {
+    const content = String(text || '').trim();
+    if (!content) return;
+
+    try {
+      Speech.stop();
+      setSpeakingMessageId(messageId || null);
+      Speech.speak(content, {
+        language: 'en-IN',
+        pitch: 1.0,
+        rate: 0.95,
+        onDone: () => setSpeakingMessageId(null),
+        onStopped: () => setSpeakingMessageId(null),
+        onError: () => {
+          setSpeakingMessageId(null);
+          setChatStatusMessage('Unable to play voice right now.');
+        },
+      });
+    } catch {
+      setSpeakingMessageId(null);
+      setChatStatusMessage('Unable to play voice right now.');
+    }
+  }, []);
+
+  const toggleSpeech = useCallback(() => {
+    setIsSpeechEnabled((prev) => {
+      const next = !prev;
+      if (!next) {
+        try {
+          Speech.stop();
+        } catch {
+          // Ignore speech stop failures.
+        }
+        setSpeakingMessageId(null);
+      }
+      return next;
+    });
+  }, []);
+
   const requestRemoteAIResponse = async (
     question: string,
     conversation: ChatMessage[]
@@ -1351,9 +1409,13 @@ export default function PropertyDetails() {
       try {
         const { answer, endpointFailed } = await requestRemoteAIResponse(currentInput, conversation);
         if (answer) {
-          const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: answer, sender: 'ai' };
+          const cleanedAnswer = normalizeAssistantText(answer);
+          const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: cleanedAnswer, sender: 'ai' };
           setLastAIIntent('remote_ai');
           setChatMessages((prev) => [...prev, aiMsg]);
+          if (isSpeechEnabled) {
+            speakAssistantMessage(aiMsg.text, aiMsg.id);
+          }
           return;
         }
 
@@ -1455,8 +1517,15 @@ export default function PropertyDetails() {
             ' Ask me a focused question like "Is this good for families?", "Is price fair?", or "What\'s the investment potential?"';
         }
 
-        const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: response, sender: 'ai' };
+        const aiMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          text: normalizeAssistantText(response),
+          sender: 'ai',
+        };
         setChatMessages((prev) => [...prev, aiMsg]);
+        if (isSpeechEnabled) {
+          speakAssistantMessage(aiMsg.text, aiMsg.id);
+        }
       } finally {
         setIsChatResponding(false);
       }
@@ -3818,15 +3887,36 @@ export default function PropertyDetails() {
                 <Ionicons name="chatbubble-ellipses" size={24} color="#22d3ee" />
                 <Text style={styles.modalTitle}>AI Property Assistant</Text>
               </View>
-              <TouchableOpacity onPress={() => setIsAIChatVisible(false)}>
-                <Ionicons name="close-circle" size={24} color="#94a3b8" />
-              </TouchableOpacity>
+              <View style={styles.chatHeaderActions}>
+                <TouchableOpacity style={styles.chatHeaderIconBtn} onPress={toggleSpeech}>
+                  <Ionicons
+                    name={isSpeechEnabled ? 'volume-high' : 'volume-mute'}
+                    size={22}
+                    color={isSpeechEnabled ? '#22d3ee' : '#94a3b8'}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.chatHeaderIconBtn} onPress={() => setIsAIChatVisible(false)}>
+                  <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 20 }}>
               {chatMessages.map(msg => (
                 <View key={msg.id} style={[styles.chatBubble, msg.sender === 'user' ? styles.userBubble : styles.aiBubble]}>
                   <Text style={[styles.chatText, msg.sender === 'user' ? styles.userChatText : styles.aiChatText]}>{msg.text}</Text>
+                  {msg.sender === 'ai' ? (
+                    <TouchableOpacity
+                      style={styles.chatReplayBtn}
+                      onPress={() => speakAssistantMessage(msg.text, msg.id)}
+                    >
+                      <Ionicons
+                        name={speakingMessageId === msg.id ? 'volume-high' : 'volume-medium'}
+                        size={16}
+                        color="#22d3ee"
+                      />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ))}
               {isChatResponding ? (
