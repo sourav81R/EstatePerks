@@ -1,14 +1,25 @@
 :root {
-  --bg: #f4f7fb;
-  --surface: #ffffff;
-  --surface-soft: #eef3fa;
-  --ink: #0f1726;
-  --ink-soft: #4a5b76;
-  --line: #dbe5f1;
-  --brand: #e35f2e;
-  --brand-strong: #c64a1f;
-  --teal: #007f8c;
-  --radius: 18px;
+  --bg: #eef3f9;
+  --bg-elevated: #f6f9fd;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-solid: #ffffff;
+  --surface-soft: #f1f6fc;
+  --ink: #0c1a2d;
+  --ink-soft: #526783;
+  --line: #d7e2f0;
+  --line-strong: #bed0e5;
+  --brand: #e56e3a;
+  --brand-strong: #c74f1f;
+  --brand-soft: #fff1ea;
+  --teal: #0f807d;
+  --success-soft: #e8f8f2;
+  --danger: #ad3153;
+  --danger-soft: #ffe9ee;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 26px;
+  --shadow-sm: 0 10px 24px rgba(18, 38, 66, 0.08);
+  --shadow-md: 0 18px 36px rgba(18, 38, 66, 0.12);
   --font-body: "Manrope", sans-serif;
   --font-display: "Playfair Display", serif;
 }
@@ -27,11 +38,13 @@ body {
 
 body {
   background:
-    radial-gradient(circle at 10% 10%, #ffefe9 0%, transparent 35%),
-    radial-gradient(circle at 90% 0%, #e7f7fa 0%, transparent 30%),
+    radial-gradient(circle at 8% 4%, #ffe8dd 0%, transparent 30%),
+    radial-gradient(circle at 88% 0%, #dbf3f7 0%, transparent 28%),
+    radial-gradient(circle at 50% 120%, #ffffff 0%, transparent 30%),
     var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
+  letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -53,55 +66,90 @@ img {
 
 .section-title {
   font-family: var(--font-display);
-  font-size: clamp(1.7rem, 2vw, 2.3rem);
+  font-size: clamp(1.85rem, 2.4vw, 2.7rem);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   margin-bottom: 0.55rem;
 }
 
 .section-subtitle {
   color: var(--ink-soft);
-  font-size: 0.99rem;
-  line-height: 1.5;
+  font-size: 1rem;
+  line-height: 1.65;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  padding: 0.35rem 0.7rem;
-  background: #fff6f2;
+  padding: 0.45rem 0.82rem;
+  background: var(--brand-soft);
   color: var(--brand-strong);
-  border: 1px solid #ffd7c8;
+  border: 1px solid #ffd8c8;
 }
 
 .btn {
   border: none;
   cursor: pointer;
-  border-radius: 12px;
-  font-weight: 700;
-  transition: transform 0.18s ease, background 0.18s ease;
+  border-radius: var(--radius-sm);
+  font-weight: 800;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    background 0.22s ease,
+    color 0.22s ease,
+    border-color 0.22s ease;
 }
 
 .btn:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(229, 110, 58, 0.25);
+  outline-offset: 2px;
 }
 
 .btn-primary {
-  background: var(--brand);
-  color: #fff;
+  background: linear-gradient(135deg, #ec8856, var(--brand));
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(200, 86, 44, 0.35);
 }
 
 .btn-primary:hover {
-  background: var(--brand-strong);
+  background: linear-gradient(135deg, #e87d49, var(--brand-strong));
 }
 
 .card {
-  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(250, 252, 255, 0.78));
+  backdrop-filter: blur(6px);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 @keyframes fadeUp {
@@ -112,5 +160,15 @@ img {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .container {
+    width: min(1180px, calc(100% - 1.25rem));
+  }
+
+  .section-title {
+    font-size: clamp(1.6rem, 8vw, 2.1rem);
   }
 }

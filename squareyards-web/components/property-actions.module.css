@@ -1,19 +1,27 @@
 .row {
   margin-top: 0.8rem;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.45rem;
 }
 
 .actionBtn {
-  min-height: 34px;
-  padding: 0.35rem 0.65rem;
-  border-radius: 9px;
+  min-height: 35px;
+  padding: 0.36rem 0.68rem;
+  border-radius: 10px;
   border: 1px solid #d3dfee;
   background: #f6f9ff;
   color: #334e72;
   font-size: 0.78rem;
   font-weight: 800;
   cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.actionBtn:hover {
+  transform: translateY(-1px);
+  border-color: #bed1e8;
+  background: #ffffff;
 }
 
 .actionBtn:disabled {

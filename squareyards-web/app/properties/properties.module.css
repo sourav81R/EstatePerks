@@ -3,60 +3,69 @@
 }
 
 .top {
-  margin-bottom: 1rem;
+  margin-bottom: 1.15rem;
 }
 
 .grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 312px 1fr;
 }
 
 .filterPane {
   position: sticky;
-  top: 90px;
+  top: 94px;
   padding: 1rem;
   height: fit-content;
 }
 
 .filterTitle {
-  font-size: 1rem;
-  font-weight: 800;
+  font-size: 1.02rem;
+  font-weight: 900;
+  color: #183f64;
 }
 
 .filterForm {
-  margin-top: 0.9rem;
+  margin-top: 0.95rem;
   display: grid;
-  gap: 0.7rem;
+  gap: 0.72rem;
 }
 
 .filterForm label {
   display: grid;
-  gap: 0.3rem;
-  font-size: 0.82rem;
+  gap: 0.32rem;
+  font-size: 0.8rem;
   color: #516988;
   font-weight: 700;
 }
 
 .filterForm input,
 .filterForm select {
-  min-height: 42px;
-  border-radius: 10px;
+  min-height: 43px;
+  border-radius: 11px;
   border: 1px solid #d4dfed;
   background: #f8fbff;
   color: #274060;
-  padding: 0 0.7rem;
+  padding: 0 0.72rem;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.filterForm input:hover,
+.filterForm select:hover {
+  border-color: #bccfe6;
+  background: #ffffff;
 }
 
 .filterForm button {
-  margin-top: 0.4rem;
+  margin-top: 0.42rem;
   min-height: 44px;
 }
 
 .resultMeta {
-  margin: 0.2rem 0 0.9rem;
-  font-weight: 700;
+  margin: 0.2rem 0 0.95rem;
+  font-weight: 800;
   color: #446084;
+  font-size: 0.93rem;
 }
 
 .cards {
@@ -69,12 +78,14 @@
   margin-top: 1rem;
   padding: 1rem;
   color: #527097;
+  font-size: 0.92rem;
 }
 
 @media (max-width: 1080px) {
   .grid {
     grid-template-columns: 1fr;
   }
+
   .filterPane {
     position: static;
   }

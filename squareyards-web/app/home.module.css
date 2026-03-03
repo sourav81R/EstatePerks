@@ -1,5 +1,5 @@
 .section {
-  margin-top: 3rem;
+  margin-top: 3.4rem;
 }
 
 .statsGrid {
@@ -9,19 +9,20 @@
 }
 
 .statCard {
-  padding: 1rem;
+  padding: 1.05rem;
 }
 
 .statValue {
-  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-size: clamp(1.45rem, 2vw, 1.95rem);
   font-weight: 900;
-  color: #17365a;
+  color: #16395d;
+  line-height: 1.1;
 }
 
 .statLabel {
-  margin-top: 0.35rem;
+  margin-top: 0.4rem;
   color: #587092;
-  font-size: 0.88rem;
+  font-size: 0.87rem;
 }
 
 .sectionHead {
@@ -29,12 +30,19 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.1rem;
 }
 
 .link {
   color: var(--brand-strong);
   font-weight: 800;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.link:hover {
+  border-bottom-color: var(--brand-strong);
+  color: #a03d17;
 }
 
 .cardGrid {
@@ -55,27 +63,28 @@
 }
 
 .requirementTitle {
-  font-size: 1rem;
+  font-size: 1.02rem;
   font-weight: 900;
-  color: #224264;
+  color: #1f4368;
 }
 
 .requirementSub {
-  margin-top: 0.35rem;
+  margin-top: 0.42rem;
   color: #577192;
   font-size: 0.89rem;
+  line-height: 1.45;
 }
 
 .requirementMetric {
-  margin-top: 0.8rem;
+  margin-top: 0.82rem;
   color: var(--teal);
   font-weight: 800;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 .requirementCard a {
-  display: inline-block;
-  margin-top: 0.8rem;
+  display: inline-flex;
+  margin-top: 0.85rem;
   color: var(--brand-strong);
   font-weight: 800;
 }
@@ -93,20 +102,21 @@
 
 .builderName {
   font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-size: 1.38rem;
 }
 
 .builderMeta {
   margin-top: 0.35rem;
   color: #536f91;
-  font-size: 0.87rem;
+  font-size: 0.86rem;
 }
 
 .builderCities {
   margin-top: 0.6rem;
   color: #2f4f78;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
+  line-height: 1.45;
 }
 
 .cityGrid {
@@ -122,19 +132,20 @@
 
 .cityName {
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: 1.5rem;
 }
 
 .cityTitle {
-  margin-top: 0.35rem;
+  margin-top: 0.4rem;
   color: #334a6d;
   font-weight: 700;
+  line-height: 1.4;
 }
 
 .cityMeta {
-  margin-top: 0.4rem;
+  margin-top: 0.42rem;
   color: #617895;
-  font-size: 0.9rem;
+  font-size: 0.87rem;
 }
 
 .utilityGrid {
@@ -165,17 +176,20 @@
 
 .trendHead span {
   color: #0f845c;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  background: #e8f6f1;
+  border-radius: 999px;
+  padding: 0.2rem 0.46rem;
 }
 
 .trendPrice {
   margin-top: 0.45rem;
   color: #556f90;
-  font-size: 0.87rem;
+  font-size: 0.84rem;
 }
 
 .trendMeter {
-  margin-top: 0.7rem;
+  margin-top: 0.74rem;
   height: 8px;
   border-radius: 999px;
   background: #edf3fb;
@@ -189,9 +203,9 @@
 }
 
 .trendScore {
-  margin-top: 0.35rem;
+  margin-top: 0.38rem;
   color: #436181;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
 }
 
@@ -200,15 +214,16 @@
 }
 
 .newsTitle {
-  font-size: 1.1rem;
-  font-weight: 800;
+  font-size: 1.14rem;
+  font-weight: 900;
+  color: #173f63;
 }
 
 .newsText {
-  margin-top: 0.45rem;
+  margin-top: 0.48rem;
   color: #5f7594;
-  font-size: 0.93rem;
-  line-height: 1.55;
+  font-size: 0.9rem;
+  line-height: 1.7;
 }
 
 .points {
@@ -218,12 +233,12 @@
 }
 
 .points span {
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-soft);
   border: 1px solid var(--line);
-  padding: 0.55rem 0.65rem;
+  padding: 0.56rem 0.68rem;
   color: #355176;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   font-weight: 700;
 }
 
@@ -239,7 +254,7 @@
 }
 
 .guideTitle {
-  font-size: 1rem;
+  font-size: 1.03rem;
   font-weight: 900;
   color: #1e3f63;
 }
@@ -247,8 +262,8 @@
 .guideSummary {
   margin-top: 0.5rem;
   color: #567091;
-  line-height: 1.55;
-  font-size: 0.88rem;
+  line-height: 1.62;
+  font-size: 0.86rem;
 }
 
 .guideCard a {
@@ -262,9 +277,11 @@
   .statsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   .cardGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   .builderGrid,
   .trendGrid,
   .guideGrid,
@@ -275,6 +292,10 @@
 }
 
 @media (max-width: 740px) {
+  .section {
+    margin-top: 2.8rem;
+  }
+
   .cardGrid,
   .requirementGrid,
   .builderGrid,
@@ -285,6 +306,7 @@
   .utilityGrid {
     grid-template-columns: 1fr;
   }
+
   .sectionHead {
     flex-direction: column;
     align-items: flex-start;

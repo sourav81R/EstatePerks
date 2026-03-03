@@ -1,52 +1,87 @@
 .hero {
-  padding: 4.5rem 0 3rem;
+  position: relative;
+  padding: 5.1rem 0 3.1rem;
+}
+
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: 999px;
+  filter: blur(22px);
+}
+
+.hero::before {
+  width: 240px;
+  height: 240px;
+  top: 10px;
+  right: 8%;
+  background: rgba(35, 156, 156, 0.18);
+}
+
+.hero::after {
+  width: 180px;
+  height: 180px;
+  left: 4%;
+  top: 95px;
+  background: rgba(229, 110, 58, 0.2);
 }
 
 .heroInner {
-  animation: fadeUp 0.7s ease both;
+  animation: fadeUp 0.72s ease both;
 }
 
 .title {
   margin-top: 1rem;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 1.1;
+  font-size: clamp(2.35rem, 4vw, 3.7rem);
+  line-height: 1.06;
   max-width: 14ch;
+  letter-spacing: -0.03em;
 }
 
 .subtitle {
-  margin-top: 0.85rem;
+  margin-top: 1rem;
   max-width: 64ch;
   color: var(--ink-soft);
-  line-height: 1.65;
-  font-size: 1rem;
+  line-height: 1.75;
+  font-size: 1.03rem;
 }
 
 .searchCard {
-  margin-top: 1.5rem;
-  background: var(--surface);
+  margin-top: 1.7rem;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(246, 250, 255, 0.8));
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 0.9rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 0.95rem;
   display: grid;
-  gap: 0.7rem;
+  gap: 0.72rem;
   grid-template-columns: 2fr repeat(3, 1fr) auto;
 }
 
 .searchCard input,
 .searchCard select {
-  min-height: 46px;
-  border-radius: 10px;
-  border: 1px solid #d5e0ef;
-  padding: 0 0.8rem;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid #cfdeef;
+  padding: 0 0.84rem;
   font-size: 0.94rem;
   color: #19314f;
   background: #f8fbff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.searchCard input:hover,
+.searchCard select:hover {
+  border-color: #bccfe6;
+  background: #ffffff;
 }
 
 .searchCard button {
-  min-height: 46px;
-  padding: 0 1rem;
+  min-height: 48px;
+  padding: 0 1.15rem;
 }
 
 .keyword {
@@ -60,7 +95,16 @@
 }
 
 @media (max-width: 700px) {
+  .hero {
+    padding-top: 4.2rem;
+  }
+
+  .title {
+    font-size: clamp(1.95rem, 10vw, 2.5rem);
+  }
+
   .searchCard {
+    border-radius: 18px;
     grid-template-columns: 1fr;
   }
 }
