@@ -1,0 +1,33 @@
+.form {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: 1fr auto;
+}
+
+.form input {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid #d4dfed;
+  background: #f9fbff;
+  padding: 0 0.85rem;
+  color: #213653;
+}
+
+.form button {
+  min-height: 48px;
+  min-width: 120px;
+  padding: 0 1rem;
+}
+
+.message {
+  grid-column: 1 / -1;
+  font-size: 0.9rem;
+  color: #2c4e74;
+}
+
+@media (max-width: 720px) {
+  .form {
+    grid-template-columns: 1fr;
+  }
+}

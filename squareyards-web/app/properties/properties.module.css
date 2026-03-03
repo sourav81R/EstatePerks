@@ -1,0 +1,87 @@
+.page {
+  margin-top: 2rem;
+}
+
+.top {
+  margin-bottom: 1rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 300px 1fr;
+}
+
+.filterPane {
+  position: sticky;
+  top: 90px;
+  padding: 1rem;
+  height: fit-content;
+}
+
+.filterTitle {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.filterForm {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.filterForm label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: #516988;
+  font-weight: 700;
+}
+
+.filterForm input,
+.filterForm select {
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid #d4dfed;
+  background: #f8fbff;
+  color: #274060;
+  padding: 0 0.7rem;
+}
+
+.filterForm button {
+  margin-top: 0.4rem;
+  min-height: 44px;
+}
+
+.resultMeta {
+  margin: 0.2rem 0 0.9rem;
+  font-weight: 700;
+  color: #446084;
+}
+
+.cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.empty {
+  margin-top: 1rem;
+  padding: 1rem;
+  color: #527097;
+}
+
+@media (max-width: 1080px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .filterPane {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}

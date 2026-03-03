@@ -1,0 +1,192 @@
+.page {
+  margin-top: 1.5rem;
+}
+
+.breadcrumb {
+  color: #56708f;
+  font-size: 0.87rem;
+}
+
+.grid {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  align-items: start;
+}
+
+.heroImage {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+}
+
+.heroImage img {
+  object-fit: cover;
+}
+
+.title {
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 2.5vw, 2.4rem);
+}
+
+.location {
+  margin-top: 0.4rem;
+  color: #59728f;
+}
+
+.priceBand {
+  margin-top: 0.9rem;
+  padding: 0.9rem;
+  border-radius: 14px;
+  background: #fff8f5;
+  border: 1px solid #ffd7ca;
+}
+
+.price {
+  color: var(--brand-strong);
+  font-size: 1.55rem;
+  font-weight: 900;
+}
+
+.meta {
+  margin-top: 0.25rem;
+  color: #405a7e;
+  font-size: 0.9rem;
+}
+
+.quickGrid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.quickGrid > div {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.75rem;
+}
+
+.quickLabel {
+  font-size: 0.75rem;
+  color: #667f9d;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.quickValue {
+  margin-top: 0.4rem;
+  color: #193659;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.block {
+  margin-top: 1rem;
+  padding: 1rem;
+}
+
+.block h2 {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.block p {
+  margin-top: 0.55rem;
+  color: #40597b;
+  line-height: 1.6;
+}
+
+.block ul {
+  margin-top: 0.8rem;
+  padding-left: 1rem;
+  color: #355173;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.amenities {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.amenities span {
+  border-radius: 999px;
+  border: 1px solid #d7e4f5;
+  background: #f4f8ff;
+  padding: 0.4rem 0.7rem;
+  font-weight: 700;
+  color: #375478;
+  font-size: 0.84rem;
+}
+
+.gallery {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.galleryCard {
+  position: relative;
+  height: 170px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.galleryCard img {
+  object-fit: cover;
+}
+
+.relatedWrap {
+  margin-top: 2.5rem;
+}
+
+.relatedHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.relatedHead a {
+  color: var(--brand-strong);
+  font-weight: 800;
+}
+
+.relatedGrid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .quickGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .quickGrid,
+  .gallery,
+  .relatedGrid {
+    grid-template-columns: 1fr;
+  }
+  .heroImage {
+    height: 260px;
+  }
+}

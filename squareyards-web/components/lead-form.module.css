@@ -1,0 +1,47 @@
+.formWrap {
+  padding: 1rem;
+  position: sticky;
+  top: 90px;
+}
+
+.title {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.sub {
+  margin-top: 0.25rem;
+  color: #587091;
+  font-size: 0.88rem;
+}
+
+.form {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.form input,
+.form textarea {
+  border: 1px solid #d4dfed;
+  border-radius: 11px;
+  background: #f8fbff;
+  min-height: 42px;
+  padding: 0.65rem 0.75rem;
+  color: #223450;
+}
+
+.form textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.form button {
+  min-height: 44px;
+}
+
+.status {
+  margin-top: 0.85rem;
+  color: #2b4c73;
+  font-size: 0.9rem;
+}
