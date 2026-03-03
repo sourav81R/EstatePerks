@@ -5,12 +5,17 @@ This folder contains a full web implementation using Next.js App Router with bui
 ## Features
 
 - SquareYards-style home page (hero search, city collections, featured projects)
+- Requirement-based discovery, top builders, and city trend snapshots
 - Listings page with city/type/BHK/budget filters
-- Property detail page with inquiry form
+- Property detail page with inquiry + site-visit booking forms
+- Shortlist + compare workflow with compare tray and compare page
+- Buyer tool: EMI calculator
 - Backend APIs in Next.js:
   - `GET /api/properties`
   - `GET /api/properties/[id]`
   - `POST /api/leads`
+  - `GET /api/visits`
+  - `POST /api/visits`
   - `POST /api/newsletter`
   - `POST /api/ai-assistant`
   - `GET /api/health`

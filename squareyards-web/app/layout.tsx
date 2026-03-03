@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Manrope, Playfair_Display } from "next/font/google";
 
+import { CompareDrawer } from "@/components/compare-drawer";
+import { PortalStateProvider } from "@/components/portal-state-provider";
+
 import "./globals.css";
 
 const manrope = Manrope({
@@ -26,7 +29,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${manrope.variable} ${playfair.variable}`}>{children}</body>
+      <body className={`${manrope.variable} ${playfair.variable}`}>
+        <PortalStateProvider>
+          {children}
+          <CompareDrawer />
+        </PortalStateProvider>
+      </body>
     </html>
   );
 }

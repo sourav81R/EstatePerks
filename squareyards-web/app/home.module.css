@@ -43,6 +43,72 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.requirementGrid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.requirementCard {
+  padding: 1rem;
+}
+
+.requirementTitle {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #224264;
+}
+
+.requirementSub {
+  margin-top: 0.35rem;
+  color: #577192;
+  font-size: 0.89rem;
+}
+
+.requirementMetric {
+  margin-top: 0.8rem;
+  color: var(--teal);
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.requirementCard a {
+  display: inline-block;
+  margin-top: 0.8rem;
+  color: var(--brand-strong);
+  font-weight: 800;
+}
+
+.builderGrid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.builderCard {
+  padding: 1rem;
+}
+
+.builderName {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.builderMeta {
+  margin-top: 0.35rem;
+  color: #536f91;
+  font-size: 0.87rem;
+}
+
+.builderCities {
+  margin-top: 0.6rem;
+  color: #2f4f78;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .cityGrid {
   margin-top: 1rem;
   display: grid;
@@ -77,6 +143,58 @@
   grid-template-columns: 1fr 1fr;
 }
 
+.trendGrid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.trendCard {
+  padding: 1rem;
+}
+
+.trendHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: baseline;
+  color: #1f3e62;
+  font-weight: 800;
+}
+
+.trendHead span {
+  color: #0f845c;
+  font-size: 0.8rem;
+}
+
+.trendPrice {
+  margin-top: 0.45rem;
+  color: #556f90;
+  font-size: 0.87rem;
+}
+
+.trendMeter {
+  margin-top: 0.7rem;
+  height: 8px;
+  border-radius: 999px;
+  background: #edf3fb;
+  overflow: hidden;
+}
+
+.trendMeter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #1ea476, #0c7a8e);
+}
+
+.trendScore {
+  margin-top: 0.35rem;
+  color: #436181;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .newsCard {
   padding: 1rem;
 }
@@ -109,6 +227,37 @@
   font-weight: 700;
 }
 
+.guideGrid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.guideCard {
+  padding: 1rem;
+}
+
+.guideTitle {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #1e3f63;
+}
+
+.guideSummary {
+  margin-top: 0.5rem;
+  color: #567091;
+  line-height: 1.55;
+  font-size: 0.88rem;
+}
+
+.guideCard a {
+  margin-top: 0.75rem;
+  display: inline-block;
+  color: var(--brand-strong);
+  font-weight: 800;
+}
+
 @media (max-width: 1060px) {
   .statsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -116,6 +265,10 @@
   .cardGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .builderGrid,
+  .trendGrid,
+  .guideGrid,
+  .requirementGrid,
   .cityGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -123,6 +276,10 @@
 
 @media (max-width: 740px) {
   .cardGrid,
+  .requirementGrid,
+  .builderGrid,
+  .trendGrid,
+  .guideGrid,
   .statsGrid,
   .cityGrid,
   .utilityGrid {

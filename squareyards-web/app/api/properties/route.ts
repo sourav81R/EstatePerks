@@ -19,6 +19,14 @@ export async function GET(request: NextRequest) {
   const bhk = Number.isFinite(bhkRaw) && bhkRaw > 0 ? bhkRaw : undefined;
   const minPriceCr = parsePrice(searchParams.get("minPriceCr"));
   const maxPriceCr = parsePrice(searchParams.get("maxPriceCr"));
+  const sortByParam = searchParams.get("sortBy");
+  const sortBy =
+    sortByParam === "price_asc" ||
+    sortByParam === "price_desc" ||
+    sortByParam === "rating_desc" ||
+    sortByParam === "new_launch"
+      ? sortByParam
+      : "relevance";
 
   const result = filterProperties({
     city,
@@ -27,6 +35,7 @@ export async function GET(request: NextRequest) {
     bhk,
     minPriceCr,
     maxPriceCr,
+    sortBy,
   });
 
   return NextResponse.json({
@@ -36,6 +45,7 @@ export async function GET(request: NextRequest) {
       cities: ["All", ...getCities()],
       types: ["All", "Apartment", "Villa", "Plot", "Office"],
       bhk: [1, 2, 3, 4],
+      sortBy: ["relevance", "price_asc", "price_desc", "rating_desc", "new_launch"],
     },
     stats: getInventoryStats(),
   });

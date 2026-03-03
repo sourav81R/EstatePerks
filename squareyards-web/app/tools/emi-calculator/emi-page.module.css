@@ -1,0 +1,40 @@
+.page {
+  margin-top: 2rem;
+}
+
+.hero {
+  margin-bottom: 0.9rem;
+}
+
+.links {
+  margin-top: 0.8rem;
+  display: flex;
+  gap: 0.8rem;
+}
+
+.links a {
+  color: var(--brand-strong);
+  font-weight: 800;
+}
+
+.notes {
+  margin-top: 1rem;
+}
+
+.notes article {
+  padding: 1rem;
+}
+
+.noteTitle {
+  font-weight: 900;
+  font-size: 1rem;
+  color: #1c3d62;
+}
+
+.notes ul {
+  margin-top: 0.65rem;
+  padding-left: 1rem;
+  color: #4f6788;
+  display: grid;
+  gap: 0.35rem;
+}

@@ -26,6 +26,14 @@ export default async function PropertiesPage({
   const bhk = Number(readQuery(params.bhk)) || 0;
   const minPriceCr = Number(readQuery(params.minPriceCr)) || undefined;
   const maxPriceCr = Number(readQuery(params.maxPriceCr)) || undefined;
+  const sortByRaw = readQuery(params.sortBy);
+  const sortBy =
+    sortByRaw === "price_asc" ||
+    sortByRaw === "price_desc" ||
+    sortByRaw === "rating_desc" ||
+    sortByRaw === "new_launch"
+      ? sortByRaw
+      : "relevance";
 
   const results = filterProperties({
     city,
@@ -34,6 +42,7 @@ export default async function PropertiesPage({
     bhk: bhk > 0 ? bhk : undefined,
     minPriceCr,
     maxPriceCr,
+    sortBy,
   });
 
   const cities = getCities();
@@ -89,6 +98,17 @@ export default async function PropertiesPage({
                   <option value="2">2 BHK</option>
                   <option value="3">3 BHK</option>
                   <option value="4">4 BHK</option>
+                </select>
+              </label>
+
+              <label>
+                Sort by
+                <select name="sortBy" defaultValue={sortBy}>
+                  <option value="relevance">Relevance</option>
+                  <option value="price_asc">Price: Low to High</option>
+                  <option value="price_desc">Price: High to Low</option>
+                  <option value="rating_desc">Top Rated</option>
+                  <option value="new_launch">New Launch First</option>
                 </select>
               </label>
 

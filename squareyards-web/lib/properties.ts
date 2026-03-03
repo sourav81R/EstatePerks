@@ -388,6 +388,109 @@ export const cityCollections = [
   },
 ];
 
+export const requirementCollections = [
+  {
+    id: "new-launch",
+    title: "New Launch Projects",
+    subtitle: "Early-bird pricing and launch inventory",
+    href: "/properties?type=Apartment",
+    metric: "Starting from Rs 0.98 Cr",
+  },
+  {
+    id: "ready-move",
+    title: "Ready To Move Homes",
+    subtitle: "Immediate possession options",
+    href: "/properties?city=Bangalore",
+    metric: "Zero waiting period",
+  },
+  {
+    id: "investment",
+    title: "Investor Picks",
+    subtitle: "High rental-demand micro markets",
+    href: "/properties?city=Gurgaon",
+    metric: "4.8% avg rental yield",
+  },
+  {
+    id: "luxury",
+    title: "Luxury Collection",
+    subtitle: "Premium addresses and larger layouts",
+    href: "/properties?minPriceCr=4",
+    metric: "Projects above Rs 4 Cr",
+  },
+];
+
+export const topBuilders = [
+  {
+    name: "DLF",
+    activeProjects: 22,
+    deliveredHomes: "1,80,000+",
+    cities: ["Gurgaon", "Chandigarh", "Delhi"],
+  },
+  {
+    name: "Godrej Properties",
+    activeProjects: 37,
+    deliveredHomes: "1,20,000+",
+    cities: ["Mumbai", "Pune", "Gurgaon", "Bangalore"],
+  },
+  {
+    name: "Prestige Group",
+    activeProjects: 29,
+    deliveredHomes: "1,65,000+",
+    cities: ["Bangalore", "Hyderabad", "Chennai", "Mumbai"],
+  },
+  {
+    name: "Sobha",
+    activeProjects: 18,
+    deliveredHomes: "85,000+",
+    cities: ["Bangalore", "Gurgaon", "Pune", "Kochi"],
+  },
+];
+
+export const marketTrends = [
+  {
+    city: "Gurgaon",
+    avgPricePerSqft: 12900,
+    oneYearGrowthPct: 14.8,
+    demandScore: 92,
+  },
+  {
+    city: "Bangalore",
+    avgPricePerSqft: 11400,
+    oneYearGrowthPct: 12.1,
+    demandScore: 89,
+  },
+  {
+    city: "Mumbai",
+    avgPricePerSqft: 19300,
+    oneYearGrowthPct: 9.7,
+    demandScore: 85,
+  },
+  {
+    city: "Noida",
+    avgPricePerSqft: 9600,
+    oneYearGrowthPct: 11.6,
+    demandScore: 84,
+  },
+];
+
+export const advisoryGuides = [
+  {
+    title: "How To Evaluate Builder Credibility Before Booking",
+    summary: "Checklist for RERA history, delivery record, and legal due diligence.",
+    href: "/tools/emi-calculator",
+  },
+  {
+    title: "Budget Planning: Booking Amount, Stamp Duty, and Registration",
+    summary: "Understand up-front cash outflow before finalizing your home.",
+    href: "/tools/emi-calculator",
+  },
+  {
+    title: "Investment Lens: Yield Vs Appreciation",
+    summary: "When to prioritize monthly rental yield over long-term capital growth.",
+    href: "/tools/emi-calculator",
+  },
+];
+
 export function formatPriceCr(priceCr: number): string {
   return `Rs ${priceCr.toFixed(2)} Cr`;
 }
@@ -419,9 +522,34 @@ export function getInventoryStats() {
   };
 }
 
+export function sortProperties(
+  input: Property[],
+  sortBy: "relevance" | "price_asc" | "price_desc" | "rating_desc" | "new_launch" = "relevance",
+): Property[] {
+  const items = [...input];
+  if (sortBy === "price_asc") {
+    return items.sort((a, b) => a.priceCr - b.priceCr);
+  }
+  if (sortBy === "price_desc") {
+    return items.sort((a, b) => b.priceCr - a.priceCr);
+  }
+  if (sortBy === "rating_desc") {
+    return items.sort((a, b) => b.rating - a.rating);
+  }
+  if (sortBy === "new_launch") {
+    return items.sort((a, b) => {
+      const aScore = a.isNewLaunch ? 1 : 0;
+      const bScore = b.isNewLaunch ? 1 : 0;
+      if (aScore === bScore) return b.rating - a.rating;
+      return bScore - aScore;
+    });
+  }
+  return items;
+}
+
 export function filterProperties(filters: PropertyFilters): Property[] {
   const normalizedKeyword = (filters.keyword || "").trim().toLowerCase();
-  return properties.filter((property) => {
+  const filtered = properties.filter((property) => {
     if (filters.city && filters.city !== "All" && property.city !== filters.city) {
       return false;
     }
@@ -453,4 +581,5 @@ export function filterProperties(filters: PropertyFilters): Property[] {
       .toLowerCase();
     return haystack.includes(normalizedKeyword);
   });
+  return sortProperties(filtered, filters.sortBy);
 }

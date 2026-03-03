@@ -1,0 +1,108 @@
+.grid {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.panel {
+  padding: 1rem;
+}
+
+.title {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: #17385d;
+}
+
+.sub {
+  margin-top: 0.35rem;
+  color: #5d7697;
+  font-size: 0.9rem;
+}
+
+.controls {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.controls label {
+  display: grid;
+  gap: 0.3rem;
+  color: #5a7394;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.controls input {
+  min-height: 42px;
+  border: 1px solid #d4dff0;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: #244265;
+  padding: 0 0.75rem;
+}
+
+.resultGrid {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.resultGrid > div {
+  border: 1px solid #dce6f5;
+  border-radius: 12px;
+  background: #f6faff;
+  padding: 0.7rem;
+}
+
+.resultLabel {
+  font-size: 0.77rem;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #61799a;
+}
+
+.resultValue {
+  margin-top: 0.36rem;
+  color: #1e4268;
+  font-weight: 900;
+}
+
+.affordability {
+  margin-top: 1rem;
+}
+
+.meter {
+  margin-top: 0.5rem;
+  height: 10px;
+  border-radius: 999px;
+  background: #ebf1f9;
+  overflow: hidden;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f4ae6b, #e35f2e);
+}
+
+.meta {
+  margin-top: 0.45rem;
+  color: #597291;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .resultGrid {
+    grid-template-columns: 1fr;
+  }
+}

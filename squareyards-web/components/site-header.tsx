@@ -19,6 +19,8 @@ export function SiteHeader() {
           <Link href="/properties?type=Plot">Plots</Link>
           <Link href="/properties?city=Gurgaon">Projects in Gurgaon</Link>
           <Link href="/properties?city=Bangalore">Projects in Bangalore</Link>
+          <Link href="/compare">Compare</Link>
+          <Link href="/tools/emi-calculator">EMI Calculator</Link>
         </nav>
 
         <Link href="/properties" className={`${styles.action} btn btn-primary`}>

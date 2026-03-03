@@ -20,6 +20,8 @@ export function SiteFooter() {
               <Link href="/properties?city=Gurgaon">New Projects in Gurgaon</Link>
               <Link href="/properties?city=Bangalore">Flats in Bangalore</Link>
               <Link href="/properties?type=Plot">Plots for Sale</Link>
+              <Link href="/compare">Compare Properties</Link>
+              <Link href="/tools/emi-calculator">EMI Calculator</Link>
             </div>
           </div>
           <div>

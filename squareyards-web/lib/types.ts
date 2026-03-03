@@ -35,6 +35,7 @@ export interface PropertyFilters {
   minPriceCr?: number;
   maxPriceCr?: number;
   keyword?: string;
+  sortBy?: "relevance" | "price_asc" | "price_desc" | "rating_desc" | "new_launch";
 }
 
 export interface LeadPayload {
@@ -43,4 +44,14 @@ export interface LeadPayload {
   email: string;
   phone: string;
   message?: string;
+}
+
+export interface VisitPayload {
+  propertyId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  preferredDate: string;
+  timeSlot: "Morning" | "Afternoon" | "Evening";
+  notes?: string;
 }

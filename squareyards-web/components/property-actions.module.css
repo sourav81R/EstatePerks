@@ -1,0 +1,34 @@
+.row {
+  margin-top: 0.8rem;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.actionBtn {
+  min-height: 34px;
+  padding: 0.35rem 0.65rem;
+  border-radius: 9px;
+  border: 1px solid #d3dfee;
+  background: #f6f9ff;
+  color: #334e72;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.actionBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.activeCompare {
+  border-color: #f4c3ae;
+  background: #fff2eb;
+  color: #b0431f;
+}
+
+.activeShortlist {
+  border-color: #b7decb;
+  background: #ecfbf3;
+  color: #156d45;
+}

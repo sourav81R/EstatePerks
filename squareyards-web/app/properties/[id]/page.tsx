@@ -2,8 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CompareButton } from "@/components/compare-button";
 import { LeadForm } from "@/components/lead-form";
 import { PropertyCard } from "@/components/property-card";
+import { ScheduleVisitForm } from "@/components/schedule-visit-form";
+import { ShortlistButton } from "@/components/shortlist-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getPropertyByIdOrSlug, properties } from "@/lib/properties";
@@ -42,6 +45,10 @@ export default async function PropertyDetailPage({
             <p className={styles.location}>
               {property.locality}, {property.city}, {property.state}
             </p>
+            <div className={styles.actions}>
+              <ShortlistButton propertyId={property.id} />
+              <CompareButton propertyId={property.id} />
+            </div>
 
             <div className={styles.priceBand}>
               <p className={styles.price}>{`Rs ${property.priceCr.toFixed(2)} Cr`}</p>
@@ -103,7 +110,10 @@ export default async function PropertyDetailPage({
             </section>
           </article>
 
-          <LeadForm propertyId={property.id} propertyName={property.name} />
+          <div className={styles.sidebarStack}>
+            <LeadForm propertyId={property.id} propertyName={property.name} />
+            <ScheduleVisitForm propertyId={property.id} propertyName={property.name} />
+          </div>
         </section>
 
         <section className={styles.relatedWrap}>

@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Property } from "@/lib/types";
+import { CompareButton } from "./compare-button";
+import { ShortlistButton } from "./shortlist-button";
 
 import styles from "./property-card.module.css";
 
@@ -31,6 +33,10 @@ export function PropertyCard({ property }: PropertyCardProps) {
           {property.type}
         </p>
         <p className={styles.summary}>{property.summary}</p>
+        <div className={styles.actions}>
+          <ShortlistButton propertyId={property.id} />
+          <CompareButton propertyId={property.id} />
+        </div>
         <div className={styles.bottom}>
           <span className={styles.rating}>{property.rating.toFixed(1)} rating</span>
           <Link href={`/properties/${property.slug}`} className={styles.link}>
